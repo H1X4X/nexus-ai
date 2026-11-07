@@ -2,6 +2,8 @@
 
 An interactive engineering proposal and live 3D command center for a self-healing, distributed drone network.
 
+**Live site:** https://h1x4x.github.io/nexus-ai/
+
 The site combines the full proposal with a working browser-based simulation: 12 drones, a Main AI, a Backup AI, mesh routing, coordinator failover, link and drone failures, buffered records, and a shared map that distinguishes live data from stale data.
 
 ## What is inside
