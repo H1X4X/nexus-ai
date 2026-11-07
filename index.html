@@ -1,0 +1,1075 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NEXUS AI — Distributed Intelligent Drone Network</title>
+  <meta name="description" content="NEXUS AI is an interactive engineering proposal for a self-healing network of intelligent drones: local AI, resilient mesh communication, distributed coordination and a live 3D command center." />
+  <meta name="theme-color" content="#050b13" />
+  <meta name="color-scheme" content="dark" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="assets/fonts/fonts.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="NEXUS AI — Distributed Intelligent Drone Network" />
+  <meta property="og:description" content="Every drone thinks locally. The network understands globally. Explore the proposal and break a live self-healing drone mesh." />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "NEXUS AI — Distributed Intelligent Drone Network",
+    "description": "An interactive engineering proposal for a distributed, self-healing drone network with local AI, mesh communication and human supervision.",
+    "about": ["Drone networks", "Distributed systems", "Mesh networking", "Search and rescue"],
+    "inLanguage": "en"
+  }
+  </script>
+</head>
+<body id="top">
+
+<svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <symbol id="i-logo" viewBox="0 0 40 40">
+    <path d="M20 3.5 34.5 12v16.5L20 37 5.5 28.5V12L20 3.5Z" fill="none" stroke="currentColor" stroke-width="2" />
+    <circle cx="20" cy="20" r="3.2" fill="currentColor" />
+    <circle cx="20" cy="10.2" r="1.7" fill="currentColor" />
+    <circle cx="28.6" cy="24.9" r="1.7" fill="currentColor" />
+    <circle cx="11.4" cy="24.9" r="1.7" fill="currentColor" />
+    <path d="M20 12.4v4.4M22.8 21.9l4 2.3M17.2 21.9l-4 2.3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+  </symbol>
+  <symbol id="i-drone" viewBox="0 0 24 24">
+    <rect x="9" y="9" width="6" height="6" rx="1.5" />
+    <path d="M7 7 4.5 4.5M17 7l2.5-2.5M7 17l-2.5 2.5M17 17l2.5 2.5" />
+    <circle cx="4" cy="4" r="1.6" /><circle cx="20" cy="4" r="1.6" />
+    <circle cx="4" cy="20" r="1.6" /><circle cx="20" cy="20" r="1.6" />
+  </symbol>
+  <symbol id="i-mesh" viewBox="0 0 24 24">
+    <circle cx="12" cy="5" r="2" /><circle cx="5" cy="17" r="2" /><circle cx="19" cy="17" r="2" /><circle cx="12" cy="12" r="2" />
+    <path d="M12 7v3M10.4 13.4 6.5 16M13.6 13.4l3.9 2.6M6.9 15.6l8.7-2.4" />
+  </symbol>
+  <symbol id="i-brain" viewBox="0 0 24 24">
+    <path d="M9.5 4.5a3 3 0 0 0-3 3 3 3 0 0 0-1.5 5.5A3 3 0 0 0 6.5 18a3 3 0 0 0 5.5 1.5V4.9a2.5 2.5 0 0 0-2.5-.4Z" />
+    <path d="M14.5 4.5a3 3 0 0 1 3 3 3 3 0 0 1 1.5 5.5 3 3 0 0 1-1.5 5 3 3 0 0 1-5.5 1.5" />
+    <path d="M9 8.5h2M13 12h2M9 15h2" />
+  </symbol>
+  <symbol id="i-radio" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="2" />
+    <path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2" />
+  </symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24">
+    <path d="M12 3 4.5 6v6c0 4.4 3 7.7 7.5 9 4.5-1.3 7.5-4.6 7.5-9V6L12 3Z" />
+    <path d="m8.7 12 2.2 2.2 4.4-4.4" />
+  </symbol>
+  <symbol id="i-map" viewBox="0 0 24 24">
+    <path d="m3.5 6 5-2 7 2 5-2v14l-5 2-7-2-5 2V6Z" />
+    <path d="M8.5 4v14M15.5 6v14" />
+  </symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24">
+    <path d="m12 3 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5M3 16l9 5 9-5" />
+  </symbol>
+  <symbol id="i-server" viewBox="0 0 24 24">
+    <rect x="3" y="4" width="18" height="6" rx="2" /><rect x="3" y="14" width="18" height="6" rx="2" />
+    <path d="M7 7h.01M7 17h.01M11 7h5M11 17h5" />
+  </symbol>
+  <symbol id="i-users" viewBox="0 0 24 24">
+    <circle cx="9" cy="8" r="3" /><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5" />
+    <path d="M16 5.5a3 3 0 0 1 0 5.8M17.2 15.4c2 .6 3.3 2.2 3.3 4.6" />
+  </symbol>
+  <symbol id="i-search" viewBox="0 0 24 24">
+    <circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.3 15.3 5 5" />
+  </symbol>
+  <symbol id="i-fire" viewBox="0 0 24 24">
+    <path d="M13 3s1 3.2-1.3 5.2C9.4 10 8 11.5 8 14a4 4 0 0 0 8 0c0-1.4-.5-2.4-1.2-3.4-.3 1.7-1.3 2.4-2.3 2.4-1.4 0-2-1.3-1.6-2.8C11.5 8 13 6 13 3Z" />
+    <path d="M6 21h12" />
+  </symbol>
+  <symbol id="i-flood" viewBox="0 0 24 24">
+    <path d="M3 8c2.5 0 2.5 1.5 5 1.5S10.5 8 13 8s2.5 1.5 5 1.5S20.5 8 21 8M3 13c2.5 0 2.5 1.5 5 1.5s2.5-1.5 5-1.5 2.5 1.5 5 1.5 2.5-1.5 3-1.5M3 18c2.5 0 2.5 1.5 5 1.5s2.5-1.5 5-1.5 2.5 1.5 5 1.5 2.5-1.5 3-1.5" />
+  </symbol>
+  <symbol id="i-leaf" viewBox="0 0 24 24">
+    <path d="M20 4C12 4 5 8 5 15c0 3 2 5 5 5 7 0 10-7 10-16Z" /><path d="M4 21c2-6 6-9 11-11" />
+  </symbol>
+  <symbol id="i-sprout" viewBox="0 0 24 24">
+    <path d="M12 21V10" /><path d="M12 12c0-4-3-7-8-7 0 4 3 7 8 7ZM12 9c0-4 3-6 8-6 0 4-3 6-8 6Z" />
+  </symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24">
+    <path d="M14.5 6.5a3.5 3.5 0 0 0 4.6 4.6L21 15l-2 2-3.9-1.9a3.5 3.5 0 0 0-4.6-4.6L4 4l2-2 6.5 6.5Z" />
+    <path d="m4 20 7-7" />
+  </symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24">
+    <path d="M12 4 2.8 20h18.4L12 4Z" /><path d="M12 9v5M12 17.5h.01" />
+  </symbol>
+  <symbol id="i-info" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 7.5h.01" />
+  </symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m4.5 12.5 5 5 10-11" /></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6" /></symbol>
+  <symbol id="i-arrow-up-right" viewBox="0 0 24 24"><path d="M7 17 17 7M8 7h9v9" /></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5 19 12 8 18.5v-13Z" /></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14" /></symbol>
+  <symbol id="i-reset" viewBox="0 0 24 24"><path d="M4 10a8 8 0 1 1 2.3 8.2M4 4v6h6" /></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24">
+    <path d="M4 7h3l1.5-2h7L17 7h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z" />
+    <circle cx="12" cy="13" r="3.5" />
+  </symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24">
+    <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="3" />
+  </symbol>
+  <symbol id="i-link" viewBox="0 0 24 24">
+    <path d="M10 13.5a4 4 0 0 0 5.7 0l2.8-2.8a4 4 0 0 0-5.7-5.7L11.5 6" />
+    <path d="M14 10.5a4 4 0 0 0-5.7 0l-2.8 2.8a4 4 0 0 0 5.7 5.7L12.5 18" />
+  </symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24">
+    <rect x="7" y="7" width="10" height="10" rx="2" /><path d="M9.5 2.5V7M14.5 2.5V7M9.5 17v4.5M14.5 17v4.5M2.5 9.5H7M2.5 14.5H7M17 9.5h4.5M17 14.5h4.5" />
+  </symbol>
+  <symbol id="i-battery" viewBox="0 0 24 24">
+    <rect x="2.5" y="7" width="17" height="10" rx="3" /><path d="M22 10.5v3" /><path d="M6 10.5v3M10 10.5v3" />
+  </symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3.5 2" /></symbol>
+  <symbol id="i-print" viewBox="0 0 24 24">
+    <path d="M7 8V3h10v5M7 18H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+    <rect x="7" y="14" width="10" height="7" rx="1" /><path d="M17 11h.01" />
+  </symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" /></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24">
+    <path d="M12 2.5 14 9l6.5 2-6.5 2-2 6.5-2-6.5L3.5 11 10 9l2-6.5Z" />
+  </symbol>
+  <symbol id="i-target" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.5" /><circle cx="12" cy="12" r="1" />
+  </symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="9" /><path d="M3.5 9h17M3.5 15h17M12 3c2.5 2.4 3.8 5.4 3.8 9s-1.3 6.6-3.8 9c-2.5-2.4-3.8-5.4-3.8-9S9.5 5.4 12 3Z" />
+  </symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24">
+    <rect x="4.5" y="10" width="15" height="10" rx="2.5" /><path d="M8 10V7.5a4 4 0 0 1 8 0V10M12 14v2.5" />
+  </symbol>
+  <symbol id="i-route" viewBox="0 0 24 24">
+    <circle cx="5" cy="18" r="2" /><circle cx="19" cy="6" r="2" /><path d="M7 18h4a3 3 0 0 0 3-3v-3a3 3 0 0 1 3-3h.5" />
+  </symbol>
+  <symbol id="i-signal" viewBox="0 0 24 24"><path d="M4 20v-4M9 20v-8M14 20V8M19 20V4" /></symbol>
+  <symbol id="i-database" viewBox="0 0 24 24">
+    <ellipse cx="12" cy="5.5" rx="8" ry="3" /><path d="M4 5.5v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6M4 11.5v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
+  </symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 2.5h8l4 4v15H6v-19Z" /><path d="M14 2.5v4h4M9 12h6M9 16h6" /></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2.5 4.5 14H11l-1 7.5L19.5 10H13l0-7.5Z" /></symbol>
+</svg>
+
+<header class="site-header" id="site-header">
+  <div class="container header-inner">
+    <a href="#top" class="brand">
+      <span class="brand-mark"><svg class="icon"><use href="#i-logo" /></svg></span>
+      <span class="brand-copy"><strong>NEXUS AI</strong><small>Distributed drone network</small></span>
+    </a>
+    <nav class="primary-nav" id="primary-nav" aria-label="Primary navigation">
+      <a href="#summary">Overview</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#simulator">Live simulator</a>
+      <a href="#healing">Self-healing</a>
+      <a href="#map">Shared map</a>
+      <a href="#roadmap">Roadmap</a>
+    </nav>
+    <div class="header-actions">
+      <span class="version-pill">v1.0 · interactive</span>
+      <a class="btn btn-primary btn-sm header-cta" href="#simulator"><svg class="icon"><use href="#i-play" /></svg>Launch simulator</a>
+      <button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav" aria-label="Open menu">
+        <svg class="icon icon-open"><use href="#i-menu" /></svg>
+        <svg class="icon icon-close"><use href="#i-close" /></svg>
+      </button>
+    </div>
+  </div>
+  <nav class="mobile-nav" id="mobile-nav" aria-label="Mobile navigation">
+    <a href="#summary">Overview</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#simulator">Live simulator</a>
+    <a href="#healing">Self-healing</a>
+    <a href="#map">Shared map</a>
+    <a href="#security">Security</a>
+    <a href="#roadmap">Roadmap</a>
+    <a class="btn btn-primary btn-sm" href="#simulator">Launch simulator</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="hero-glow hero-glow-a"></div>
+    <div class="hero-glow hero-glow-b"></div>
+    <div class="container hero-grid">
+      <div class="hero-copy">
+        <p class="hero-eyebrow"><span class="live-dot" aria-hidden="true"></span>Concept document · v1.0 · interactive edition</p>
+        <h1 id="hero-title">NEXUS <span class="grad-text">AI</span></h1>
+        <p class="hero-sub">Distributed Intelligent<br />Drone Network</p>
+        <p class="hero-lead">A scalable fleet of AI drones that think locally, share what they learn, and keep working when links fail. Explore the full engineering proposal — then break the network yourself in the live command center.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary btn-lg" href="#simulator"><svg class="icon"><use href="#i-zap" /></svg>Launch live simulation</a>
+          <a class="btn btn-ghost btn-lg" href="#summary">Read the proposal<svg class="icon"><use href="#i-arrow-right" /></svg></a>
+        </div>
+        <div class="hero-stats" aria-label="Project summary">
+          <div class="stat"><strong data-count="14">14</strong><span>simulated nodes</span></div>
+          <div class="stat"><strong data-count="4">4</strong><span>system layers</span></div>
+          <div class="stat"><strong data-count="3">3</strong><span>storage tiers</span></div>
+          <div class="stat"><strong data-count="8">8</strong><span>roadmap phases</span></div>
+        </div>
+        <p class="hero-note"><svg class="icon"><use href="#i-print" /></svg>Need a document? <button class="link-button" type="button" data-print>Print or save this proposal as PDF</button></p>
+      </div>
+
+      <div class="hero-visual" id="hero-visual" aria-label="Animated illustration of a connected drone mesh">
+        <div class="mesh-art">
+          <div class="mesh-ring mesh-ring-1"></div>
+          <div class="mesh-ring mesh-ring-2"></div>
+          <div class="mesh-ring mesh-ring-3"></div>
+          <svg class="mesh-svg" viewBox="0 0 600 600" role="img" aria-label="Main AI coordinator connected to twelve drone nodes">
+            <defs>
+              <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#67e8f9" stop-opacity=".55" />
+                <stop offset="1" stop-color="#22d3ee" stop-opacity="0" />
+              </radialGradient>
+              <filter id="softGlow" x="-80%" y="-80%" width="260%" height="260%">
+                <feGaussianBlur stdDeviation="4" result="b" />
+                <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+              </filter>
+            </defs>
+            <circle cx="300" cy="300" r="180" fill="url(#coreGlow)" />
+            <g class="mesh-links">
+              <path d="M300 300 300 104" /><path d="M300 300 432 146" /><path d="M300 300 503 266" /><path d="M300 300 479 403" />
+              <path d="M300 300 371 492" /><path d="M300 300 229 492" /><path d="M300 300 121 403" /><path d="M300 300 97 266" />
+              <path d="M300 300 168 146" /><path d="M300 300 209 252" /><path d="M300 300 391 252" /><path d="M300 300 300 419" />
+              <path d="M300 104 432 146" /><path d="M432 146 503 266" /><path d="M503 266 479 403" /><path d="M479 403 371 492" />
+              <path d="M371 492 229 492" /><path d="M229 492 121 403" /><path d="M121 403 97 266" /><path d="M97 266 168 146" />
+              <path d="M168 146 300 104" /><path d="M209 252 300 419" /><path d="M391 252 300 419" /><path d="M209 252 97 266" />
+              <path d="M391 252 503 266" /><path d="M209 252 300 104" /><path d="M391 252 300 104" />
+            </g>
+            <g class="mesh-packets">
+              <circle r="2.6"><animateMotion dur="4.5s" repeatCount="indefinite" path="M300 300 300 104" /></circle>
+              <circle r="2.2"><animateMotion dur="5.5s" repeatCount="indefinite" path="M300 300 479 403" /></circle>
+              <circle r="2.2"><animateMotion dur="6s" repeatCount="indefinite" path="M300 300 121 403" /></circle>
+              <circle r="2"><animateMotion dur="4s" repeatCount="indefinite" path="M300 300 391 252" /></circle>
+              <circle r="2"><animateMotion dur="7s" repeatCount="indefinite" path="M300 300 168 146" /></circle>
+            </g>
+            <g class="mesh-nodes">
+              <g transform="translate(300 104)"><circle r="9" class="node-halo" /><circle r="4.2" class="node-dot" /></g>
+              <g transform="translate(432 146)"><circle r="9" class="node-halo" /><circle r="4.2" class="node-dot" /></g>
+              <g transform="translate(503 266)"><circle r="9" class="node-halo" /><circle r="4.2" class="node-dot" /></g>
+              <g transform="translate(479 403)"><circle r="9" class="node-halo" /><circle r="4.2" class="node-dot" /></g>
+              <g transform="translate(371 492)"><circle r="9" class="node-halo" /><circle r="4.2" class="node-dot" /></g>
+              <g transform="translate(229 492)"><circle r="9" class="node-halo" /><circle r="4.2" class="node-dot" /></g>
+              <g transform="translate(121 403)"><circle r="9" class="node-halo" /><circle r="4.2" class="node-dot" /></g>
+              <g transform="translate(97 266)"><circle r="9" class="node-halo" /><circle r="4.2" class="node-dot" /></g>
+              <g transform="translate(168 146)"><circle r="9" class="node-halo" /><circle r="4.2" class="node-dot" /></g>
+              <g transform="translate(209 252)"><circle r="8" class="node-halo" /><circle r="3.6" class="node-dot" /></g>
+              <g transform="translate(391 252)"><circle r="8" class="node-halo" /><circle r="3.6" class="node-dot" /></g>
+              <g transform="translate(300 419)"><circle r="8" class="node-halo" /><circle r="3.6" class="node-dot" /></g>
+            </g>
+            <g class="mesh-core" filter="url(#softGlow)">
+              <path d="M300 254 340 277v46L300 346l-40-23v-46L300 254Z" class="core-hex" />
+              <circle cx="300" cy="300" r="9" class="core-dot" />
+              <path d="M300 271v12M321 311l-10-6M279 311l10-6" class="core-spokes" />
+            </g>
+            <text x="300" y="378" class="mesh-core-label">MAIN AI</text>
+          </svg>
+          <div class="float-card float-card-a">
+            <span class="float-dot"></span>
+            <div><strong>D07</strong><small>3 hops · active</small></div>
+            <span class="float-badge">82%</span>
+          </div>
+          <div class="float-card float-card-b">
+            <svg class="icon"><use href="#i-cpu" /></svg>
+            <div><strong>Backup replica</strong><small>state lag <span class="mono">0.0s</span></small></div>
+            <span class="float-badge ok">ready</span>
+          </div>
+          <div class="float-card float-card-c">
+            <svg class="icon"><use href="#i-radio" /></svg>
+            <div><strong>Mesh health</strong><small>no failed links</small></div>
+            <span class="float-badge ok">12/12</span>
+          </div>
+        </div>
+        <div class="hero-hud hero-hud-top">
+          <span><span class="live-dot"></span>LIVE MESH</span>
+          <span class="mono">ALL SYSTEMS NOMINAL</span>
+        </div>
+        <div class="hero-hud hero-hud-bottom">
+          <span>DRAG TO ORBIT · SCROLL TO ZOOM</span>
+          <span class="mono">T+00:25</span>
+        </div>
+      </div>
+    </div>
+    <a class="scroll-cue" href="#summary" aria-label="Scroll to the proposal"><span></span></a>
+  </section>
+
+  <div class="trust-strip" aria-label="Design principles">
+    <div class="container trust-inner">
+      <span><svg class="icon"><use href="#i-cpu" /></svg>Local intelligence</span>
+      <span><svg class="icon"><use href="#i-mesh" /></svg>Self-healing mesh</span>
+      <span><svg class="icon"><use href="#i-layers" /></svg>Distributed coordination</span>
+      <span><svg class="icon"><use href="#i-shield" /></svg>Human authority</span>
+      <span><svg class="icon"><use href="#i-map" /></svg>One shared map</span>
+    </div>
+  </div>
+
+  <section class="section" id="summary" aria-labelledby="summary-title">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">01 · Executive summary</p>
+        <h2 id="summary-title">Every drone thinks locally.<br /><span class="muted-strong">The network understands globally.</span></h2>
+        <p class="lead">NEXUS AI is a proposed distributed intelligent drone network built around one idea: resilience should be designed in from the first line of code, not added after the first failure.</p>
+      </div>
+      <div class="summary-grid">
+        <div class="summary-main reveal">
+          <div class="prose">
+            <p>Each drone carries onboard computing and AI to process its own sensor information, monitor its condition and exchange relevant information with other network members. A central coordinating AI maintains a shared system view, while backup and temporary local coordinators keep the network operating when devices or communication links become unavailable.</p>
+            <p>A remote human administrator uses one command interface to monitor drone locations, environmental observations, network health and system alerts. The design emphasises human supervision, reliable information sharing, fault tolerance, cybersecurity and safe operation. The initial development focus is civilian monitoring and response: search and rescue, wildfire observation, flood assessment and environmental mapping.</p>
+          </div>
+          <div class="principle-card reveal">
+            <span class="principle-icon"><svg class="icon"><use href="#i-spark" /></svg></span>
+            <div>
+              <p class="card-kicker">Core principle</p>
+              <p>Every drone contributes local intelligence, while the connected system builds <strong>one shared understanding</strong> of the monitored environment.</p>
+            </div>
+          </div>
+          <div class="objectives reveal">
+            <div class="objectives-head">
+              <h3>Project objectives</h3>
+              <span class="mono subtle">07 measurable goals</span>
+            </div>
+            <ol class="objective-list">
+              <li><span class="num">01</span><span>Process sensor data locally on every drone.</span></li>
+              <li><span class="num">02</span><span>Exchange status and observations over available wireless links.</span></li>
+              <li><span class="num">03</span><span>Route around a lost direct connection through alternative paths.</span></li>
+              <li><span class="num">04</span><span>Coordinate centrally, locally and through a backup — no single point of failure.</span></li>
+              <li><span class="num">05</span><span>Maintain a shared map with timestamps and confidence indicators.</span></li>
+              <li><span class="num">06</span><span>Give one administrator a unified view of health, alerts and missions.</span></li>
+              <li><span class="num">07</span><span>Protect the system with identity, encryption, validation and audit trails.</span></li>
+            </ol>
+          </div>
+        </div>
+        <aside class="promise-card reveal" aria-label="The system promise">
+          <p class="card-kicker">The system promise</p>
+          <h3>Four guarantees,<br />by design.</h3>
+          <ul class="promise-list">
+            <li>
+              <span class="promise-num">01</span>
+              <div><strong>Local intelligence</strong><p>Each drone can see, decide and record without a constant uplink.</p></div>
+            </li>
+            <li>
+              <span class="promise-num">02</span>
+              <div><strong>Resilient links</strong><p>Traffic finds another route, or waits safely until one appears.</p></div>
+            </li>
+            <li>
+              <span class="promise-num">03</span>
+              <div><strong>Distributed authority</strong><p>Main, backup and local coordinators hand over without conflict.</p></div>
+            </li>
+            <li>
+              <span class="promise-num">04</span>
+              <div><strong>Human command</strong><p>AI assists with monitoring and safety. People approve the mission.</p></div>
+            </li>
+          </ul>
+          <a class="text-link" href="#simulator">See all four in the simulator <svg class="icon"><use href="#i-arrow-right" /></svg></a>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section-alt" id="architecture" aria-labelledby="architecture-title">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">02 · The four main components</p>
+        <h2 id="architecture-title">Four layers.<br /><span class="muted-strong">No single point of failure.</span></h2>
+        <p class="lead">Intelligence at the edge, communication through the mesh, coordination across the fleet and a single accountable human interface. Select a layer to explore its responsibilities.</p>
+      </div>
+      <div class="architecture-grid">
+        <div class="layer-stack reveal" role="tablist" aria-label="Architecture layers" aria-orientation="vertical">
+          <span class="stack-line" aria-hidden="true"><span class="stack-pulse"></span></span>
+          <button class="layer-item is-active" id="layer-tab-1" type="button" role="tab" aria-selected="true" aria-controls="layer-panel-1" data-layer="1">
+            <span class="layer-index">3.1</span>
+            <span class="layer-icon"><svg class="icon"><use href="#i-cpu" /></svg></span>
+            <span class="layer-text"><strong>Edge intelligence</strong><small>Individual AI drones</small></span>
+            <svg class="icon layer-arrow"><use href="#i-arrow-right" /></svg>
+          </button>
+          <button class="layer-item" id="layer-tab-2" type="button" role="tab" aria-selected="false" aria-controls="layer-panel-2" data-layer="2" tabindex="-1">
+            <span class="layer-index">3.2</span>
+            <span class="layer-icon"><svg class="icon"><use href="#i-mesh" /></svg></span>
+            <span class="layer-text"><strong>Mesh system</strong><small>Resilient communication</small></span>
+            <svg class="icon layer-arrow"><use href="#i-arrow-right" /></svg>
+          </button>
+          <button class="layer-item" id="layer-tab-3" type="button" role="tab" aria-selected="false" aria-controls="layer-panel-3" data-layer="3" tabindex="-1">
+            <span class="layer-index">3.3</span>
+            <span class="layer-icon"><svg class="icon"><use href="#i-layers" /></svg></span>
+            <span class="layer-text"><strong>Dynamic coordination</strong><small>Main, backup, local</small></span>
+            <svg class="icon layer-arrow"><use href="#i-arrow-right" /></svg>
+          </button>
+          <button class="layer-item" id="layer-tab-4" type="button" role="tab" aria-selected="false" aria-controls="layer-panel-4" data-layer="4" tabindex="-1">
+            <span class="layer-index">3.4</span>
+            <span class="layer-icon"><svg class="icon"><use href="#i-eye" /></svg></span>
+            <span class="layer-text"><strong>Admin interface</strong><small>One human command view</small></span>
+            <svg class="icon layer-arrow"><use href="#i-arrow-right" /></svg>
+          </button>
+          <div class="stack-note">
+            <span class="live-dot"></span>
+            <span>Every layer degrades safely. No layer is required for basic survival.</span>
+          </div>
+        </div>
+        <div class="layer-panels reveal">
+          <article class="layer-panel is-active" id="layer-panel-1" role="tabpanel" aria-labelledby="layer-tab-1">
+            <div class="panel-topline"><span class="mono">3.1 — EDGE INTELLIGENCE</span><span class="status-tag">ONBOARD</span></div>
+            <h3>Individual AI drones</h3>
+            <p class="layer-summary">Each drone is an intelligent network member rather than a simple remote-controlled device. Its onboard AI processes camera and sensor information, monitors battery and hardware status, keeps local records and exchanges what matters with authorised members.</p>
+            <ul class="check-list">
+              <li>Local processing of camera and sensor observations.</li>
+              <li>Health monitoring for battery, hardware and communication status.</li>
+              <li>Local storage for observations that cannot be synchronised immediately.</li>
+              <li>Communication with nearby members using approved protocols.</li>
+              <li>Predefined safe behaviour when operator or network connectivity is lost.</li>
+              <li>Synchronisation of buffered observations when a valid connection returns.</li>
+            </ul>
+            <div class="panel-meta"><span><svg class="icon"><use href="#i-battery" /></svg>Autonomy-first</span><span><svg class="icon"><use href="#i-database" /></svg>Store &amp; forward</span><span><svg class="icon"><use href="#i-shield" /></svg>Safe by default</span></div>
+          </article>
+          <article class="layer-panel" id="layer-panel-2" role="tabpanel" aria-labelledby="layer-tab-2" hidden>
+            <div class="panel-topline"><span class="mono">3.2 — MESH SYSTEM</span><span class="status-tag">SELF-FORMING</span></div>
+            <h3>A network that routes around damage</h3>
+            <p class="layer-summary">Drones form wireless links with neighbours and move messages across multiple hops. When a direct path disappears, the mesh looks for another authenticated route — or stores the message until one becomes available.</p>
+            <ul class="check-list">
+              <li>Self-forming topology with no fixed infrastructure required.</li>
+              <li>Multi-hop routing that avoids failed nodes and blocked sectors.</li>
+              <li>Store-and-forward buffering for intermittent connectivity.</li>
+              <li>Continuous link-quality monitoring and neighbour discovery.</li>
+              <li>Authenticated, encrypted device-to-device communication.</li>
+              <li>Graceful partition and reconnection instead of network-wide failure.</li>
+            </ul>
+            <div class="panel-meta"><span><svg class="icon"><use href="#i-route" /></svg>Multi-hop</span><span><svg class="icon"><use href="#i-signal" /></svg>Link-aware</span><span><svg class="icon"><use href="#i-link" /></svg>Self-healing</span></div>
+          </article>
+          <article class="layer-panel" id="layer-panel-3" role="tabpanel" aria-labelledby="layer-tab-3" hidden>
+            <div class="panel-topline"><span class="mono">3.3 — DYNAMIC COORDINATION</span><span class="status-tag">FAULT-TOLERANT</span></div>
+            <h3>Central, backup and local</h3>
+            <p class="layer-summary">A Main AI maintains shared state while a Backup AI keeps a ready replica. If a group loses its central path, the group elects a temporary local coordinator and keeps operating until reconnection.</p>
+            <ul class="check-list">
+              <li>Main AI owns the shared operational view and global tasking.</li>
+              <li>Backup AI replicates coordinator state and monitors readiness.</li>
+              <li>Controlled handover after a health check — never a race for leadership.</li>
+              <li>Temporary local coordinators elected inside separated groups.</li>
+              <li>Conflict resolution using timestamps, source identity and version data.</li>
+              <li>Split-brain prevention and a complete, auditable decision trail.</li>
+            </ul>
+            <div class="panel-meta"><span><svg class="icon"><use href="#i-brain" /></svg>Shared state</span><span><svg class="icon"><use href="#i-shield" /></svg>Handover</span><span><svg class="icon"><use href="#i-users" /></svg>Local leaders</span></div>
+          </article>
+          <article class="layer-panel" id="layer-panel-4" role="tabpanel" aria-labelledby="layer-tab-4" hidden>
+            <div class="panel-topline"><span class="mono">3.4 — ADMIN INTERFACE</span><span class="status-tag">HUMAN-LED</span></div>
+            <h3>One view for the human in charge</h3>
+            <p class="layer-summary">The remote administrator sees the fleet as a connected system: live positions, observation freshness, network health and alerts in one place. Important mission decisions stay in human hands.</p>
+            <ul class="check-list">
+              <li>Live map of drone positions, observations and network status.</li>
+              <li>Health, battery, connectivity and freshness indicators.</li>
+              <li>Clear separation between confirmed, delayed and stale information.</li>
+              <li>Authorised mission planning with explicit approvals.</li>
+              <li>Alert review, event history and complete audit logs.</li>
+              <li>Role-based access for operators, supervisors and maintainers.</li>
+            </ul>
+            <div class="panel-meta"><span><svg class="icon"><use href="#i-map" /></svg>Unified map</span><span><svg class="icon"><use href="#i-eye" /></svg>Explainable</span><span><svg class="icon"><use href="#i-lock" /></svg>Auditable</span></div>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section-ops" id="simulator" aria-labelledby="simulator-title">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">03 · Live prototype · phase 1</p>
+        <h2 id="simulator-title">Break the network.<br /><span class="muted-strong">Watch it heal.</span></h2>
+        <p class="lead">A software-only simulation of a small civilian monitoring fleet: 12 drones with unique identities, a mesh-style communication model, a Main AI, a Backup coordinator and temporary local coordinators. Cut links, fail drones or take out the Main AI — then restore everything and watch buffered records reconcile.</p>
+      </div>
+
+      <div class="scenario-bar reveal" aria-label="Guided scenarios">
+        <span class="scenario-label">TRY A SCENARIO</span>
+        <button class="scenario-chip" type="button" data-scenario="mesh"><span>01</span>Cut the mesh</button>
+        <button class="scenario-chip" type="button" data-scenario="main"><span>02</span>Fail the Main AI</button>
+        <button class="scenario-chip" type="button" data-scenario="drone"><span>03</span>Lose a drone</button>
+        <span class="scenario-hint">Everything runs locally in your browser. No data leaves the page.</span>
+      </div>
+
+      <div class="ops-shell reveal" id="ops">
+        <div class="ops-topbar">
+          <div class="ops-title">
+            <span class="live-dot"></span>
+            <strong>LIVE OPS</strong>
+            <span class="mono sim-clock" id="sim-clock">T+00:00</span>
+            <span class="ops-state" id="sim-state">nominal</span>
+          </div>
+          <div class="ops-actions">
+            <button class="tool-button" id="sim-pause" type="button" aria-pressed="false" title="Pause simulation (Space)">
+              <svg class="icon icon-pause-only"><use href="#i-pause" /></svg>
+              <svg class="icon icon-play-only"><use href="#i-play" /></svg>
+              <span>Pause</span>
+            </button>
+            <div class="speed-control" role="group" aria-label="Simulation speed">
+              <button type="button" data-speed="1" class="is-active" aria-pressed="true">1×</button>
+              <button type="button" data-speed="2" aria-pressed="false">2×</button>
+              <button type="button" data-speed="4" aria-pressed="false">4×</button>
+            </div>
+            <button class="tool-button" id="sim-reset" type="button" title="Reset simulation (R)">
+              <svg class="icon"><use href="#i-reset" /></svg><span>Reset</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="ops-grid">
+          <aside class="ops-left" aria-label="Fleet and fault controls">
+            <section class="ops-panel coordinators-panel">
+              <div class="ops-panel-head">
+                <h3>Coordinators</h3>
+                <span class="status-tag ok" id="coord-status">Nominal</span>
+              </div>
+              <div class="coord-card" id="main-coord" role="button" tabindex="0">
+                <span class="coord-badge main">MAIN</span>
+                <div class="coord-info"><strong>Main AI</strong><small id="main-coord-sub">Shared state · connected</small></div>
+                <span class="status-dot ok" id="main-coord-dot"></span>
+              </div>
+              <div class="coord-card" id="backup-coord" role="button" tabindex="0">
+                <span class="coord-badge backup">BKUP</span>
+                <div class="coord-info"><strong>Backup AI</strong><small id="backup-coord-sub">Replica age 0.0s · standby</small></div>
+                <span class="status-dot" id="backup-coord-dot"></span>
+              </div>
+            </section>
+
+            <section class="ops-panel fleet-panel">
+              <div class="ops-panel-head">
+                <h3>Fleet</h3>
+                <span class="mono subtle" id="fleet-count">12 units</span>
+              </div>
+              <div class="fleet-list" id="fleet-list" aria-label="Drone fleet"></div>
+            </section>
+
+            <section class="ops-panel fault-panel">
+              <div class="ops-panel-head"><h3>Fault injection</h3><span class="mono subtle">sandbox</span></div>
+              <p class="panel-hint">Test the design under stress. Every fault is reversible.</p>
+              <div class="fault-group">
+                <p class="fault-group-label">Links &amp; environment</p>
+                <button type="button" class="fault-button" data-action="severLink"><svg class="icon"><use href="#i-link" /></svg><span>Sever a mesh link</span></button>
+                <button type="button" class="fault-button" data-action="interference"><svg class="icon"><use href="#i-zap" /></svg><span>Interference zone</span></button>
+                <button type="button" class="fault-button" data-action="storm"><svg class="icon"><use href="#i-alert" /></svg><span>Storm partition</span></button>
+              </div>
+              <div class="fault-group">
+                <p class="fault-group-label">Coordinators</p>
+                <button type="button" class="fault-button" data-action="main"><svg class="icon"><use href="#i-brain" /></svg><span>Fail the Main AI</span></button>
+                <button type="button" class="fault-button" data-action="backup"><svg class="icon"><use href="#i-server" /></svg><span>Fail the Backup AI</span></button>
+              </div>
+              <div class="fault-group">
+                <p class="fault-group-label">Fleet</p>
+                <button type="button" class="fault-button" data-action="failDrone"><svg class="icon"><use href="#i-drone" /></svg><span>Fail a drone</span></button>
+                <button type="button" class="fault-button" data-action="recall"><svg class="icon"><use href="#i-target" /></svg><span>Safe recall all</span></button>
+              </div>
+              <button type="button" class="btn btn-restore" data-action="restore"><svg class="icon"><use href="#i-reset" /></svg>Restore everything</button>
+            </section>
+          </aside>
+
+          <div class="ops-stage">
+            <div class="stage-toolbar">
+              <div class="view-tabs" role="tablist" aria-label="Simulator view">
+                <button type="button" class="is-active" data-view="command" role="tab" aria-selected="true">Command center</button>
+                <button type="button" data-view="topology" role="tab" aria-selected="false">Network topology</button>
+              </div>
+              <div class="camera-presets" id="camera-presets" aria-label="Camera presets">
+                <button type="button" class="is-active" data-camera="overview">Overview</button>
+                <button type="button" data-camera="top">Top-down</button>
+                <button type="button" data-camera="front">East front</button>
+                <button type="button" data-camera="orbit">Orbit</button>
+              </div>
+            </div>
+            <div class="canvas-wrap">
+              <canvas id="ops-canvas" aria-label="Interactive 3D view of the drone mesh. Drag to orbit, scroll to zoom, right-drag to pan, click a drone to inspect it."></canvas>
+              <div class="stage-badge"><span class="live-dot"></span>SIMULATED TELEMETRY</div>
+              <div class="canvas-hint" id="canvas-hint">Drag to orbit · scroll to zoom · right-drag to pan · click a node</div>
+              <div class="stage-toast" id="stage-toast" role="status" aria-live="polite"></div>
+            </div>
+            <div class="metric-strip" aria-label="Live network metrics">
+              <div class="metric"><span>Connected</span><strong id="m-connected">12/12</strong><small>to coordinator</small></div>
+              <div class="metric"><span>Avg hops</span><strong id="m-hops">2.0</strong><small>per drone</small></div>
+              <div class="metric"><span>Local groups</span><strong id="m-groups">0</strong><small>temporary</small></div>
+              <div class="metric"><span>Failed</span><strong id="m-failed">0</strong><small>nodes down</small></div>
+              <div class="metric"><span>Shared map</span><strong id="m-shared">179</strong><small>records</small></div>
+              <div class="metric"><span>Freshest obs.</span><strong id="m-fresh">1s</strong><small>observation age</small></div>
+            </div>
+            <div class="layer-bar" aria-label="Map layers">
+              <span class="layer-bar-label">MAP LAYERS</span>
+              <label class="layer-toggle"><input type="checkbox" data-layer="links" checked /><span></span>Mesh links</label>
+              <label class="layer-toggle"><input type="checkbox" data-layer="packets" checked /><span></span>Data packets</label>
+              <label class="layer-toggle"><input type="checkbox" data-layer="coverage" /><span></span>Sensor coverage</label>
+              <label class="layer-toggle"><input type="checkbox" data-layer="observations" checked /><span></span>Observations</label>
+              <label class="layer-toggle"><input type="checkbox" data-layer="labels" checked /><span></span>Labels</label>
+              <label class="layer-toggle"><input type="checkbox" data-layer="grid" checked /><span></span>Grid</label>
+            </div>
+          </div>
+
+          <aside class="ops-right" aria-label="Inspector and event log">
+            <section class="ops-panel inspector-panel">
+              <div class="ops-panel-head">
+                <h3>Inspector</h3>
+                <span class="mono subtle" id="inspector-mode">fleet overview</span>
+              </div>
+              <div id="inspector"></div>
+            </section>
+            <section class="ops-panel event-panel">
+              <div class="ops-panel-head">
+                <h3>Event log</h3>
+                <span class="live-pill"><span class="live-dot"></span>live</span>
+              </div>
+              <ol class="event-log" id="event-log" aria-live="polite"></ol>
+              <p class="event-footer">Buffered records reconcile automatically when a path returns.</p>
+            </section>
+          </aside>
+        </div>
+      </div>
+
+      <div class="scenario-notes reveal">
+        <div class="note"><span class="note-num">01</span><p><strong>Cut the mesh.</strong> The eastern drones lose the central path, elect a temporary local coordinator and buffer observations. Clear the fault to watch reconciliation.</p></div>
+        <div class="note"><span class="note-num">02</span><p><strong>Fail the Main AI.</strong> After a controlled health check, the Backup takes over. No competing leaders, no lost state.</p></div>
+        <div class="note"><span class="note-num">03</span><p><strong>Lose a drone.</strong> Switch to the command center and click any node. Stale observations keep their last known position, clearly marked with their age.</p></div>
+      </div>
+      <p class="sim-shortcuts reveal"><span class="mono">KEYBOARD</span> <kbd>Space</kbd> pause · <kbd>R</kbd> reset · <kbd>1–4</kbd> camera · <kbd>Esc</kbd> deselect</p>
+    </div>
+  </section>
+
+  <section class="section" id="how" aria-labelledby="how-title">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">04 · How the system works</p>
+        <h2 id="how-title">From first handshake<br /><span class="muted-strong">to continuous health checks.</span></h2>
+        <p class="lead">Seven steps describe a full operating cycle — and every cycle assumes that something, somewhere, may fail.</p>
+      </div>
+      <ol class="process-grid">
+        <li class="process-card reveal"><span class="process-num">01</span><span class="process-icon"><svg class="icon"><use href="#i-link" /></svg></span><h3>Initialization</h3><p>Drones join the network, authenticate and register identity, capabilities and current health.</p></li>
+        <li class="process-card reveal"><span class="process-num">02</span><span class="process-icon"><svg class="icon"><use href="#i-cpu" /></svg></span><h3>Local AI activation</h3><p>Each drone begins processing its own sensor information and monitoring its condition.</p></li>
+        <li class="process-card reveal"><span class="process-num">03</span><span class="process-icon"><svg class="icon"><use href="#i-mesh" /></svg></span><h3>Network formation</h3><p>Drones establish available wireless links and discover reachable communication paths.</p></li>
+        <li class="process-card reveal"><span class="process-num">04</span><span class="process-icon"><svg class="icon"><use href="#i-eye" /></svg></span><h3>Observation collection</h3><p>Drones collect environmental observations and label them with timestamps and source information.</p></li>
+        <li class="process-card reveal"><span class="process-num">05</span><span class="process-icon"><svg class="icon"><use href="#i-database" /></svg></span><h3>Information sync</h3><p>Local groups exchange records; the central system combines validated updates into one shared view.</p></li>
+        <li class="process-card reveal"><span class="process-num">06</span><span class="process-icon"><svg class="icon"><use href="#i-map" /></svg></span><h3>Remote visualization</h3><p>The command center presents the latest shared map, device status and network health to the administrator.</p></li>
+        <li class="process-card reveal"><span class="process-num">07</span><span class="process-icon"><svg class="icon"><use href="#i-signal" /></svg></span><h3>Continuous health checks</h3><p>Connectivity, freshness, battery and hardware are monitored continuously, with predefined safe responses.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section section-alt" id="healing" aria-labelledby="healing-title">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">05 · Self-healing communication</p>
+        <h2 id="healing-title">NEXUS AI is designed<br /><span class="muted-strong">to expect failure.</span></h2>
+        <p class="lead">A link can disappear, a battery can run low, a drone can be lost. None of those events should automatically make the rest of the network unusable. Run each failure yourself.</p>
+      </div>
+      <div class="healing-grid">
+        <article class="healing-card reveal">
+          <span class="healing-icon"><svg class="icon"><use href="#i-link" /></svg></span>
+          <h3>Link failure</h3>
+          <p>The network marks the route unavailable and seeks another authenticated, usable route.</p>
+          <button class="simulate-link" type="button" data-action="severLink">Simulate this <svg class="icon"><use href="#i-arrow-right" /></svg></button>
+        </article>
+        <article class="healing-card reveal">
+          <span class="healing-icon"><svg class="icon"><use href="#i-radio" /></svg></span>
+          <h3>Drone disconnected</h3>
+          <p>The drone follows its predefined safety procedure and preserves local records where possible.</p>
+          <button class="simulate-link" type="button" data-action="failDrone">Simulate this <svg class="icon"><use href="#i-arrow-right" /></svg></button>
+        </article>
+        <article class="healing-card reveal">
+          <span class="healing-icon"><svg class="icon"><use href="#i-drone" /></svg></span>
+          <h3>Drone destroyed or lost</h3>
+          <p>Information already synchronised to other nodes remains available even if the original drone is lost.</p>
+          <button class="simulate-link" type="button" data-action="failDrone">Simulate this <svg class="icon"><use href="#i-arrow-right" /></svg></button>
+        </article>
+        <article class="healing-card reveal">
+          <span class="healing-icon"><svg class="icon"><use href="#i-reset" /></svg></span>
+          <h3>Drone reconnects</h3>
+          <p>New records are reconciled with existing data, preserving timestamps and source identity.</p>
+          <button class="simulate-link" type="button" data-action="restore">Restore the mesh <svg class="icon"><use href="#i-arrow-right" /></svg></button>
+        </article>
+        <article class="healing-card reveal">
+          <span class="healing-icon"><svg class="icon"><use href="#i-brain" /></svg></span>
+          <h3>Main AI unavailable</h3>
+          <p>The backup coordinator can take over after a controlled handover and health check.</p>
+          <button class="simulate-link" type="button" data-action="main">Simulate this <svg class="icon"><use href="#i-arrow-right" /></svg></button>
+        </article>
+        <article class="healing-card reveal">
+          <span class="healing-icon"><svg class="icon"><use href="#i-alert" /></svg></span>
+          <h3>Group separated</h3>
+          <p>Its local coordinator maintains limited records and synchronisation until reconnection.</p>
+          <button class="simulate-link" type="button" data-action="storm">Simulate this <svg class="icon"><use href="#i-arrow-right" /></svg></button>
+        </article>
+      </div>
+      <div class="limitation reveal">
+        <span class="limitation-icon"><svg class="icon"><use href="#i-info" /></svg></span>
+        <div>
+          <strong>An honest limitation</strong>
+          <p>No system can guarantee delivery of information that existed only on a device that was destroyed or permanently lost before it could be transmitted or copied. That is why NEXUS AI replicates early and labels every record with its freshness.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="map" aria-labelledby="map-title">
+    <div class="container">
+      <div class="map-grid">
+        <div class="map-copy">
+          <div class="section-head reveal">
+            <p class="eyebrow">06 · Shared environmental map</p>
+            <h2 id="map-title">One map.<br /><span class="muted-strong">Honest about what is live and what is old.</span></h2>
+            <p class="lead">The shared map is the central output of NEXUS AI. It combines validated observations and device information into one digital representation of the monitored area — with source and time attached to every claim.</p>
+          </div>
+          <div class="map-table-wrap reveal">
+            <table class="data-table">
+              <caption class="sr-only">Map layers and their purpose</caption>
+              <thead><tr><th scope="col">Map layer</th><th scope="col">Purpose</th></tr></thead>
+              <tbody>
+                <tr><td>Drone locations</td><td>Latest reported position and update time for each drone.</td></tr>
+                <tr><td>Environment</td><td>Terrain, obstacles and mapped features.</td></tr>
+                <tr><td>Observed movement</td><td>Objects or changes, with source and timestamp.</td></tr>
+                <tr><td>Historical observations</td><td>Previous records retained for comparison and review.</td></tr>
+                <tr><td>Network status</td><td>Available links, disconnected devices and local groups.</td></tr>
+                <tr><td>Drone condition</td><td>Battery, hardware and communication health.</td></tr>
+                <tr><td>Confidence &amp; freshness</td><td>How reliable and recent each observation is.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="freshness-legend reveal">
+            <p class="card-kicker">Freshness states</p>
+            <div class="freshness-row"><span class="fresh-dot live"></span><div><strong>Live</strong><small>Confirmed in the last few seconds.</small></div></div>
+            <div class="freshness-row"><span class="fresh-dot delayed"></span><div><strong>Delayed</strong><small>Relayed over a slower or multi-hop route.</small></div></div>
+            <div class="freshness-row"><span class="fresh-dot stale"></span><div><strong>Stale</strong><small>Last known position — not confirmed.</small></div></div>
+          </div>
+          <p class="map-note reveal">If an object is no longer visible, the interface shows its last observed position and marks it as stale rather than implying the position is still confirmed.</p>
+          <button class="btn btn-ghost reveal" type="button" data-open-command>Open the command center view <svg class="icon"><use href="#i-arrow-up-right" /></svg></button>
+        </div>
+        <div class="map-art reveal" aria-label="Illustrative map with live, delayed and stale observations">
+          <div class="map-art-head"><span><span class="live-dot"></span>SHARED MAP</span><span class="mono">SECTOR 04 · 6 FEATURES</span></div>
+          <svg viewBox="0 0 640 520" role="img" aria-label="Stylized environmental map showing drones, observation markers and mesh links">
+            <defs>
+              <radialGradient id="mapGlow" cx="50%" cy="45%" r="65%">
+                <stop offset="0" stop-color="#0e3350" />
+                <stop offset="1" stop-color="#07131f" />
+              </radialGradient>
+              <pattern id="mapGrid" width="32" height="32" patternUnits="userSpaceOnUse">
+                <path d="M32 0H0v32" fill="none" stroke="#2c6f8a" stroke-opacity=".14" stroke-width="1" />
+              </pattern>
+              <filter id="mapBlur"><feGaussianBlur stdDeviation="6" /></filter>
+            </defs>
+            <rect width="640" height="520" fill="url(#mapGlow)" />
+            <rect width="640" height="520" fill="url(#mapGrid)" />
+            <g fill="none" stroke="#2f7d97" stroke-opacity=".24" stroke-width="1.2">
+              <path d="M-20 190c90-58 180-64 280-18s200 36 400-30" />
+              <path d="M-20 236c96-52 190-54 290-8s190 44 390-12" />
+              <path d="M-20 284c100-44 200-44 298 0s188 46 382 2" />
+              <path d="M-20 332c104-34 210-32 306 8s178 40 374 10" />
+              <path d="M-20 380c108-24 218-20 314 18s172 30 366 18" />
+            </g>
+            <path d="M60 470 132 392l96 18 66-104 100-28 74 60 96-34 60 72-58 100-192 24-302-30Z" fill="#0a2537" fill-opacity=".55" stroke="#2f7d97" stroke-opacity=".45" stroke-dasharray="4 6" />
+            <g class="map-links">
+              <path d="M142 300 236 250 340 286 444 224 530 268" />
+              <path d="M142 300 206 372 330 400 444 224" />
+              <path d="M340 286 330 400 444 224" />
+              <path d="M236 250 206 372" />
+            </g>
+            <g class="map-zone">
+              <circle cx="470" cy="330" r="92" />
+              <text x="470" y="418">INTERFERENCE · DELAYED</text>
+            </g>
+            <g class="map-base">
+              <path d="M120 284 142 270l22 14v30l-22 14-22-14v-30Z" />
+              <circle cx="142" cy="299" r="5" />
+              <text x="142" y="336">MAIN AI</text>
+            </g>
+            <g class="map-drone"><circle cx="236" cy="250" r="5" /><circle class="pulse" cx="236" cy="250" r="11" /><text x="236" y="232">D02</text></g>
+            <g class="map-drone"><circle cx="340" cy="286" r="5" /><circle class="pulse" cx="340" cy="286" r="11" /><text x="340" y="268">D06</text></g>
+            <g class="map-drone"><circle cx="206" cy="372" r="5" /><circle class="pulse" cx="206" cy="372" r="11" /><text x="206" y="394">D04</text></g>
+            <g class="map-drone delayed"><circle cx="444" cy="224" r="5" /><text x="444" y="206">D09</text></g>
+            <g class="map-drone delayed"><circle cx="530" cy="268" r="5" /><text x="530" y="250">D11</text></g>
+            <g class="map-drone stale"><circle cx="330" cy="400" r="5" /><text x="330" y="422">D08</text></g>
+            <g class="observation live"><path d="M282 168l10 10-10 10-10-10Z" /><text x="302" y="180">FIRE 1 · LIVE</text><small x="302" y="194">confirmed 2s ago</small></g>
+            <g class="observation live"><path d="M168 442l10 10-10 10-10-10Z" /><text x="188" y="454">SURVIVOR 1 · LIVE</text><small x="188" y="468">source D04</small></g>
+            <g class="observation delayed"><path d="M514 166l10 10-10 10-10-10Z" /><text x="534" y="178">VEHICLE 1 · DELAYED</text><small x="534" y="192">relayed · 14s</small></g>
+            <g class="observation stale"><path d="M398 342l10 10-10 10-10-10Z" /><text x="418" y="354">FLOOD 1 · STALE</text><small x="418" y="368">last seen 46s ago</small></g>
+            <g class="packet"><circle r="3"><animateMotion dur="3.2s" repeatCount="indefinite" path="M142 300 236 250 340 286 444 224" /></circle></circle></g>
+            <g class="packet"><circle r="2.5"><animateMotion dur="4.1s" repeatCount="indefinite" path="M142 300 206 372 330 400" /></circle></circle></g>
+            <g class="map-compass"><path d="M576 58v48M552 82h48" /><path d="m576 58-8 18h16l-8-18Z" /></g>
+            <text x="576" y="128" class="map-coords">34° 12' N</text>
+          </svg>
+          <div class="map-art-foot">
+            <span><i class="legend-dot live"></i>Live</span>
+            <span><i class="legend-dot delayed"></i>Delayed</span>
+            <span><i class="legend-dot stale"></i>Stale</span>
+            <span class="mono">ILLUSTRATIVE</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section-alt" id="storage" aria-labelledby="storage-title">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">07 · Storage &amp; synchronization</p>
+        <h2 id="storage-title">The system never depends<br /><span class="muted-strong">on one device for every record.</span></h2>
+        <p class="lead">Information is copied toward the centre as connectivity allows. Three tiers keep the shared picture alive even when part of the fleet is on its own.</p>
+      </div>
+      <div class="tier-grid">
+        <article class="tier-card reveal">
+          <span class="tier-num">TIER 1</span>
+          <span class="tier-icon"><svg class="icon"><use href="#i-drone" /></svg></span>
+          <h3>Local storage</h3>
+          <p>Observations and operational records collected by an individual drone.</p>
+          <span class="tier-tag">on-drone</span>
+        </article>
+        <span class="tier-arrow" aria-hidden="true"><svg class="icon"><use href="#i-arrow-right" /></svg></span>
+        <article class="tier-card reveal">
+          <span class="tier-num">TIER 2</span>
+          <span class="tier-icon"><svg class="icon"><use href="#i-users" /></svg></span>
+          <h3>Regional storage</h3>
+          <p>Selected records synchronised within a local group and its temporary coordinator.</p>
+          <span class="tier-tag">group</span>
+        </article>
+        <span class="tier-arrow" aria-hidden="true"><svg class="icon"><use href="#i-arrow-right" /></svg></span>
+        <article class="tier-card reveal">
+          <span class="tier-num">TIER 3</span>
+          <span class="tier-icon"><svg class="icon"><use href="#i-server" /></svg></span>
+          <h3>Central storage</h3>
+          <p>Shared records available to the Main AI, Backup AI and the command center.</p>
+          <span class="tier-tag">shared map</span>
+        </article>
+      </div>
+      <div class="storage-detail-grid">
+        <article class="detail-card reveal">
+          <span class="detail-icon"><svg class="icon"><use href="#i-database" /></svg></span>
+          <div><h3>Data reconciliation</h3><p>After reconnection, records are compared using timestamps, source identity and version information. Newer confirmed data wins; older records remain available for review.</p></div>
+        </article>
+        <article class="detail-card reveal">
+          <span class="detail-icon"><svg class="icon"><use href="#i-signal" /></svg></span>
+          <div><h3>Priority-aware transfer</h3><p>Small status and alert messages are handled separately from large files such as video or map packages, so the essential picture moves first.</p></div>
+        </article>
+      </div>
+      <div class="callout reveal"><svg class="icon"><use href="#i-info" /></svg><p>A file is not inherently required for long-distance communication. The distinction is between small messages and larger data transfers; both can use suitable wireless links.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="supervision" aria-labelledby="supervision-title">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">08 · Human supervision</p>
+        <h2 id="supervision-title">AI assists.<br /><span class="muted-strong">Humans decide.</span></h2>
+        <p class="lead">The AI assists with monitoring, data processing and safe operation. Human administrators remain responsible for mission-level decisions.</p>
+      </div>
+      <div class="supervision-table reveal">
+        <div class="supervision-head"><span>Human administrator</span><span>AI &amp; automated system</span></div>
+        <div class="supervision-row"><span>Monitors the overall system</span><span>Processes sensor information</span></div>
+        <div class="supervision-row"><span>Reviews environmental information</span><span>Maintains network and device status</span></div>
+        <div class="supervision-row"><span>Manages authorised civilian missions</span><span>Detects communication and hardware failures</span></div>
+        <div class="supervision-row"><span>Approves important mission-level actions</span><span>Runs predefined safe procedures</span></div>
+        <div class="supervision-row"><span>Reviews alerts and event history</span><span>Updates shared records with source and time</span></div>
+      </div>
+      <div class="scope-callout reveal">
+        <span class="scope-icon"><svg class="icon"><use href="#i-shield" /></svg></span>
+        <div><strong>Civilian scope only</strong><p>NEXUS AI is proposed for civilian monitoring and response applications — environmental observation, search and rescue, disaster assessment and safe fleet management. It does not specify weapon systems, coordinated attacks or autonomous targeting.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section-alt" id="security" aria-labelledby="security-title">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">09 · Security &amp; reliability</p>
+        <h2 id="security-title">Trust is designed in,<br /><span class="muted-strong">not bolted on.</span></h2>
+        <p class="lead">Identity, authorisation, encryption and a complete audit trail are part of the architecture — not an afterthought for a later phase.</p>
+      </div>
+      <div class="security-grid">
+        <article class="security-card reveal"><span class="security-icon"><svg class="icon"><use href="#i-lock" /></svg></span><h3>Encrypted links</h3><p>Encrypted communication between authenticated devices.</p></article>
+        <article class="security-card reveal"><span class="security-icon"><svg class="icon"><use href="#i-users" /></svg></span><h3>Identity &amp; roles</h3><p>Unique device identities and role-based access permissions.</p></article>
+        <article class="security-card reveal"><span class="security-icon"><svg class="icon"><use href="#i-eye" /></svg></span><h3>Admin access</h3><p>Secure administrator authentication and access logging.</p></article>
+        <article class="security-card reveal"><span class="security-icon"><svg class="icon"><use href="#i-check" /></svg></span><h3>Data validation</h3><p>Validation of data sources and protection against corrupted records.</p></article>
+        <article class="security-card reveal"><span class="security-icon"><svg class="icon"><use href="#i-reset" /></svg></span><h3>Update control</h3><p>Software update controls and secure configuration management.</p></article>
+        <article class="security-card reveal"><span class="security-icon"><svg class="icon"><use href="#i-alert" /></svg></span><h3>Safe modes</h3><p>Emergency stop, safe-mode and loss-of-link procedures.</p></article>
+        <article class="security-card reveal"><span class="security-icon"><svg class="icon"><use href="#i-file" /></svg></span><h3>Audit trail</h3><p>Audit logs for important system events and administrative actions.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="applications" aria-labelledby="applications-title">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">10 · Potential civilian applications</p>
+        <h2 id="applications-title">Built for the places<br /><span class="muted-strong">people need eyes the most.</span></h2>
+        <p class="lead">The same distributed architecture supports very different missions. The common need: current, trustworthy information across a wide area.</p>
+      </div>
+      <div class="application-grid">
+        <article class="application-card reveal"><span class="app-icon"><svg class="icon"><use href="#i-search" /></svg></span><h3>Search &amp; rescue</h3><p>Coordinate observations over a wide search area and keep working when the terrain breaks direct links.</p></article>
+        <article class="application-card reveal"><span class="app-icon"><svg class="icon"><use href="#i-fire" /></svg></span><h3>Wildfire monitoring</h3><p>Map fire boundaries, smoke and changing conditions with timestamps and source confidence.</p></article>
+        <article class="application-card reveal"><span class="app-icon"><svg class="icon"><use href="#i-flood" /></svg></span><h3>Flood &amp; disaster assessment</h3><p>Create updated maps of affected areas and access routes when infrastructure is unavailable.</p></article>
+        <article class="application-card reveal"><span class="app-icon"><svg class="icon"><use href="#i-leaf" /></svg></span><h3>Environmental monitoring</h3><p>Observe forests, coastlines, wildlife habitats and protected areas over long periods.</p></article>
+        <article class="application-card reveal"><span class="app-icon"><svg class="icon"><use href="#i-sprout" /></svg></span><h3>Agriculture</h3><p>Monitor large fields and identify areas that need a human inspection, not a guess.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section-alt" id="challenges" aria-labelledby="challenges-title">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">11 · Main engineering challenges</p>
+        <h2 id="challenges-title">Honest about<br /><span class="muted-strong">what is hard.</span></h2>
+        <p class="lead">A credible proposal names the difficult parts. Each challenge below is an explicit engineering workstream, not a footnote.</p>
+      </div>
+      <div class="challenge-table-wrap reveal">
+        <table class="data-table challenge-table">
+          <caption class="sr-only">Engineering challenges and their areas of engineering</caption>
+          <thead><tr><th scope="col">Challenge</th><th scope="col">Area of engineering</th><th scope="col">First tested in</th></tr></thead>
+          <tbody>
+            <tr><td>Large fleet scale</td><td>Distributed systems and fleet management</td><td><span class="phase-chip">Phase 7</span></td></tr>
+            <tr><td>Intermittent connectivity</td><td>Mesh networking and delay-tolerant communication</td><td><span class="phase-chip">Phase 1</span></td></tr>
+            <tr><td>Data conflicts after reconnection</td><td>Distributed databases and synchronisation</td><td><span class="phase-chip">Phase 3</span></td></tr>
+            <tr><td>Onboard processing limits</td><td>Edge computing and efficient AI models</td><td><span class="phase-chip">Phase 2</span></td></tr>
+            <tr><td>Coordinator failure</td><td>Fault tolerance and controlled failover</td><td><span class="phase-chip">Phase 4</span></td></tr>
+            <tr><td>Map accuracy</td><td>Computer vision, sensor fusion and mapping</td><td><span class="phase-chip">Phase 5</span></td></tr>
+            <tr><td>Security</td><td>Cybersecurity, identity and access control</td><td><span class="phase-chip">Phase 2</span></td></tr>
+            <tr><td>Battery &amp; endurance</td><td>Energy management and hardware design</td><td><span class="phase-chip">Phase 8</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout reveal"><svg class="icon"><use href="#i-zap" /></svg><p><strong>What can be validated first?</strong> Almost all of the coordination, buffering, failover and reconciliation logic can be tested in software — before any hardware investment. That is exactly what the simulator on this page is for.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="roadmap" aria-labelledby="roadmap-title">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">12 · Development roadmap</p>
+        <h2 id="roadmap-title">Eight phases from simulation<br /><span class="muted-strong">to controlled field test.</span></h2>
+        <p class="lead">Each phase reduces one kind of uncertainty. Phase 1 is already playable on this page.</p>
+      </div>
+      <div class="roadmap-layout">
+        <ol class="roadmap-list">
+          <li class="roadmap-item is-current reveal">
+            <span class="roadmap-marker"><span>1</span></span>
+            <div class="roadmap-card">
+              <div class="roadmap-top"><span class="phase-label">PHASE 1</span><span class="status-tag ok">Playable now</span></div>
+              <h3>Software simulation</h3>
+              <p>Create simulated drones and test individual AI agents, status reporting and basic data exchange.</p>
+              <a class="text-link" href="#simulator">Open the live simulation <svg class="icon"><use href="#i-arrow-right" /></svg></a>
+            </div>
+          </li>
+          <li class="roadmap-item reveal"><span class="roadmap-marker"><span>2</span></span><div class="roadmap-card"><div class="roadmap-top"><span class="phase-label">PHASE 2</span></div><h3>Communication prototype</h3><p>Test authenticated device-to-device messaging and alternative network routes in a controlled environment.</p></div></li>
+          <li class="roadmap-item reveal"><span class="roadmap-marker"><span>3</span></span><div class="roadmap-card"><div class="roadmap-top"><span class="phase-label">PHASE 3</span></div><h3>Local coordination</h3><p>Build local groups, temporary coordinators and data synchronisation after reconnection.</p></div></li>
+          <li class="roadmap-item reveal"><span class="roadmap-marker"><span>4</span></span><div class="roadmap-card"><div class="roadmap-top"><span class="phase-label">PHASE 4</span></div><h3>Main &amp; backup coordination</h3><p>Implement coordinator health checks, state replication and controlled failover.</p></div></li>
+          <li class="roadmap-item reveal"><span class="roadmap-marker"><span>5</span></span><div class="roadmap-card"><div class="roadmap-top"><span class="phase-label">PHASE 5</span></div><h3>Mapping &amp; data quality</h3><p>Build an environmental map with timestamps, source attribution and confidence indicators.</p></div></li>
+          <li class="roadmap-item reveal"><span class="roadmap-marker"><span>6</span></span><div class="roadmap-card"><div class="roadmap-top"><span class="phase-label">PHASE 6</span></div><h3>Remote command center</h3><p>Develop the administrator dashboard and event history.</p></div></li>
+          <li class="roadmap-item reveal"><span class="roadmap-marker"><span>7</span></span><div class="roadmap-card"><div class="roadmap-top"><span class="phase-label">PHASE 7</span></div><h3>Scale &amp; reliability testing</h3><p>Simulate larger fleets, intermittent links, device failures and heavy data loads.</p></div></li>
+          <li class="roadmap-item reveal"><span class="roadmap-marker"><span>8</span></span><div class="roadmap-card"><div class="roadmap-top"><span class="phase-label">PHASE 8</span></div><h3>Controlled civilian prototype</h3><p>Test with appropriate hardware, safety procedures and permissions in a controlled civilian setting.</p></div></li>
+        </ol>
+        <aside class="roadmap-aside reveal">
+          <p class="card-kicker">Current focus</p>
+          <div class="progress-ring" aria-label="Phase 1 of 8 in progress">
+            <svg viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="ring-track" cx="60" cy="60" r="52" />
+              <circle class="ring-fill" cx="60" cy="60" r="52" />
+            </svg>
+            <div><strong>01</strong><span>/ 08</span></div>
+          </div>
+          <h3>Validate the logic before the hardware.</h3>
+          <p>The first phase is deliberately software-only. It tests the architecture that is hardest to change later: identity, routing, buffering, coordination and reconciliation.</p>
+          <ul class="aside-list">
+            <li><svg class="icon"><use href="#i-check" /></svg>12-drone mesh simulation</li>
+            <li><svg class="icon"><use href="#i-check" /></svg>Main, backup and local coordinators</li>
+            <li><svg class="icon"><use href="#i-check" /></svg>Observable failure and recovery</li>
+            <li><svg class="icon"><use href="#i-check" /></svg>Freshness-aware shared map</li>
+          </ul>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section-alt" id="vision" aria-labelledby="vision-title">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">13–14 · Vision &amp; first prototype</p>
+        <h2 id="vision-title">A reliable distributed<br /><span class="muted-strong">information system. Not just a fleet.</span></h2>
+      </div>
+      <div class="vision-grid">
+        <div class="vision-copy reveal">
+          <p class="vision-lead">NEXUS AI aims to bring individual intelligence, resilient communication, distributed coordination and human supervision into one connected system.</p>
+          <p>Every drone contributes local observations; the network shares and synchronises information; central and local coordinators help the system remain available; and the remote command center presents a unified view to authorised human administrators.</p>
+          <p>The long-term goal is not simply to operate many drones. It is to build a reliable distributed information system in which many intelligent devices can cooperate, recover from individual failures and help people understand changing environments.</p>
+          <div class="vision-principles">
+            <span><svg class="icon"><use href="#i-cpu" /></svg>Think locally</span>
+            <span><svg class="icon"><use href="#i-mesh" /></svg>Share resiliently</span>
+            <span><svg class="icon"><use href="#i-layers" /></svg>Coordinate without a single failure point</span>
+            <span><svg class="icon"><use href="#i-users" /></svg>Keep humans accountable</span>
+          </div>
+        </div>
+        <article class="prototype-card reveal">
+          <div class="prototype-head"><span class="card-kicker">Recommended first prototype</span><span class="status-tag ok">Live on this page</span></div>
+          <h3>Start with software.</h3>
+          <p>Begin with a software-only simulation of a small civilian monitoring fleet. Simulate several drones, each with a local AI agent and a unique identity. Add a mesh-style communication model, a central coordinator, a backup coordinator, one temporary local coordinator and a simple map dashboard.</p>
+          <p>Then test what happens when links disappear, devices stop responding and connectivity returns. This validates the core architecture before hardware investment.</p>
+          <div class="prototype-diagram" aria-hidden="true">
+            <span class="diagram-node main">MAIN</span>
+            <span class="diagram-line"></span>
+            <span class="diagram-node local">LOCAL</span>
+            <span class="diagram-line"></span>
+            <span class="diagram-node drone">D07</span>
+            <span class="diagram-line"></span>
+            <span class="diagram-node drone">D08</span>
+          </div>
+          <a class="btn btn-primary" href="#simulator"><svg class="icon"><use href="#i-play" /></svg>That is exactly what the simulator does</a>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="final-cta">
+    <div class="container">
+      <div class="cta-panel reveal">
+        <div class="cta-glow" aria-hidden="true"></div>
+        <div class="cta-copy">
+          <p class="eyebrow">The network is only as strong as its next failure</p>
+          <h2>Go break it.</h2>
+          <p>Cut a link. Take out the Main AI. Lose a drone. Then watch the mesh reroute, the backup take over and the buffered records reconcile.</p>
+        </div>
+        <div class="cta-actions">
+          <a class="btn btn-primary btn-lg" href="#simulator"><svg class="icon"><use href="#i-zap" /></svg>Open the command center</a>
+          <button class="btn btn-ghost btn-lg" type="button" data-print><svg class="icon"><use href="#i-print" /></svg>Print the proposal</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div class="footer-brand">
+      <a href="#top" class="brand">
+        <span class="brand-mark"><svg class="icon"><use href="#i-logo" /></svg></span>
+        <span class="brand-copy"><strong>NEXUS AI</strong><small>Distributed drone network</small></span>
+      </a>
+      <p>A distributed intelligent drone network for civilian monitoring, search and rescue, and disaster response. Designed to keep working when individual devices or links do not.</p>
+      <span class="footer-version">Concept document · Version 1.0 · Interactive edition</span>
+    </div>
+    <div class="footer-col">
+      <h3>Proposal</h3>
+      <a href="#summary">Executive summary</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#how">How it works</a>
+      <a href="#map">Shared map</a>
+      <a href="#storage">Storage &amp; sync</a>
+    </div>
+    <div class="footer-col">
+      <h3>Explore</h3>
+      <a href="#simulator">Live simulator</a>
+      <a href="#healing">Self-healing</a>
+      <a href="#security">Security</a>
+      <a href="#applications">Applications</a>
+      <a href="#roadmap">Roadmap</a>
+    </div>
+    <div class="footer-col footer-scope">
+      <h3>Scope note</h3>
+      <p>This proposal focuses on civilian environmental monitoring, search and rescue, disaster response and safe fleet management. It does not specify weapon systems, coordinated attacks or autonomous target engagement.</p>
+      <span class="mono">CIVILIAN USE ONLY</span>
+    </div>
+  </div>
+  <div class="container footer-bottom">
+    <span>© 2026 NEXUS AI concept · All telemetry on this page is simulated.</span>
+    <span>No trackers. No external data collection. <a href="#top">Back to top <svg class="icon"><use href="#i-arrow-up-right" /></svg></a></span>
+  </div>
+</footer>
+
+<script src="assets/app.js"></script>
+</body>
+</html>
