@@ -2391,6 +2391,50 @@ html.js-anim .reveal.is-visible { opacity: 1; transform: none; }
 .camera-presets button.is-active { border-color: var(--line-strong); background: rgba(34, 211, 238, 0.07); color: var(--cyan-2); }
 .camera-presets button:disabled { opacity: 0.35; cursor: not-allowed; }
 
+.env-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px 18px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(6, 16, 26, 0.55);
+}
+.env-group { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.env-label {
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.12em;
+}
+.env-options {
+  display: inline-flex;
+  gap: 2px;
+  flex-wrap: wrap;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(4, 12, 20, 0.6);
+}
+.env-button {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--faint);
+  font-size: 0.64rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.2s, color 0.2s;
+}
+.env-button:hover { color: var(--ink-2); background: rgba(120, 190, 220, 0.07); }
+.env-button.is-active { background: rgba(34, 211, 238, 0.14); color: var(--cyan-2); }
+.env-button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.env-drill { margin-left: auto; min-height: 30px; font-size: 0.68rem; }
+.env-drill .icon { width: 13px; height: 13px; }
+.env-drill.is-active { border-color: rgba(251, 191, 36, 0.45); color: var(--amber); background: rgba(251, 191, 36, 0.08); }
+
+
 .canvas-wrap {
   position: relative;
   flex: 1 1 auto;
@@ -2560,6 +2604,70 @@ html.js-anim .reveal.is-visible { opacity: 1; transform: none; }
 .layer-toggle input:checked + span { background: rgba(34, 211, 238, 0.3); }
 .layer-toggle input:checked + span::after { transform: translateX(10px); background: var(--cyan-2); }
 .layer-toggle input:focus-visible + span { outline: 2px solid var(--cyan-2); outline-offset: 2px; }
+
+/* ---------- shared map feature rail ---------- */
+
+.feature-rail {
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+  padding: 7px 14px;
+  border-top: 1px solid var(--line);
+  background: rgba(6, 16, 26, 0.6);
+}
+.rail-label {
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.12em;
+  flex: none;
+}
+.feature-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; flex: 1 1 auto; }
+.feature-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(4, 12, 20, 0.55);
+  color: var(--ink-2);
+  font-size: 0.62rem;
+  transition: border-color 0.2s, background 0.2s, opacity 0.2s;
+}
+.feature-chip:hover { border-color: var(--line-strong); background: rgba(18, 42, 60, 0.7); }
+.feature-chip:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.chip-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--dot, var(--cyan));
+  box-shadow: 0 0 8px var(--dot, var(--cyan));
+}
+.chip-name { white-space: nowrap; }
+.chip-state {
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.feature-chip.stale { border-color: rgba(251, 191, 36, 0.3); }
+.feature-chip.stale .chip-state { color: var(--amber); }
+.feature-chip.lost { border-color: rgba(251, 113, 133, 0.32); opacity: 0.78; }
+.feature-chip.lost .chip-state { color: var(--red); }
+.rail-note {
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.03em;
+  flex: none;
+}
+.rail-note.warn { color: var(--amber); }
+.rail-note.bad { color: var(--red); }
+
 
 /* ---------- inspector ---------- */
 
@@ -2875,6 +2983,11 @@ kbd {
   .stage-toolbar { padding: 9px 11px; }
   .camera-presets { display: none; }
   .canvas-hint { display: none; }
+  .env-bar { padding: 8px 11px; gap: 7px 12px; }
+  .env-group { flex: 1 1 100%; }
+  .env-drill { margin-left: 0; }
+  .feature-rail { padding: 7px 11px; }
+  .rail-label { width: 100%; }
   .map-art-head, .map-art-foot { font-size: 0.5rem; }
   .security-grid { grid-template-columns: 1fr; }
   .application-grid { grid-template-columns: 1fr; }

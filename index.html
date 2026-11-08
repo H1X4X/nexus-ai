@@ -503,13 +503,13 @@
           </span>
         </div>
         <div class="run-actions">
-          <button class="tool-button" id="run-copy" type="button" title="Copy a link that reproduces this run" aria-label="Copy scenario link">
+          <button class="tool-button" id="run-copy" type="button" title="Copy a link that reproduces this run" aria-label="Copy link">
             <svg class="icon"><use href="#i-link" /></svg><span>Copy link</span>
           </button>
-          <button class="tool-button" id="run-export" type="button" title="Download the run summary as JSON" aria-label="Export run as JSON">
+          <button class="tool-button" id="run-export" type="button" title="Download the run summary as JSON" aria-label="Export JSON">
             <svg class="icon"><use href="#i-download" /></svg><span>Export JSON</span>
           </button>
-          <button class="tool-button" id="run-csv" type="button" title="Download the run summary as CSV" aria-label="Export run as CSV">
+          <button class="tool-button" id="run-csv" type="button" title="Download the run summary as CSV" aria-label="CSV">
             <svg class="icon"><use href="#i-table" /></svg><span>CSV</span>
           </button>
           <span class="run-note">Same seed + scenario = same run</span>
@@ -604,11 +604,29 @@
                 <button type="button" data-camera="orbit">Orbit</button>
               </div>
             </div>
+            <div class="env-bar" aria-label="Map and situation">
+              <div class="env-group">
+                <span class="env-label">MAP</span>
+                <div class="env-options" id="map-options" role="group" aria-label="Choose a map"></div>
+              </div>
+              <div class="env-group">
+                <span class="env-label">SITUATION</span>
+                <div class="env-options" id="situation-options" role="group" aria-label="Choose a situation"></div>
+              </div>
+              <button class="tool-button env-drill" id="run-drill" type="button" aria-pressed="false" title="Run an automated failure drill: a link cuts, a drone is lost, then everything restores">
+                <svg class="icon"><use href="#i-play" /></svg><span>Run drill</span>
+              </button>
+            </div>
             <div class="canvas-wrap">
               <canvas id="ops-canvas" aria-label="Interactive 3D view of the drone mesh. Drag to orbit, scroll to zoom, right-drag to pan, click a drone to inspect it."></canvas>
               <div class="stage-badge"><span class="live-dot"></span>SIMULATED TELEMETRY</div>
               <div class="canvas-hint" id="canvas-hint">Drag to orbit · scroll to zoom · right-drag to pan · click a node</div>
               <div class="stage-toast" id="stage-toast" role="status" aria-live="polite"></div>
+            </div>
+            <div class="feature-rail" aria-label="Monitored map features">
+              <span class="rail-label">SHARED MAP</span>
+              <div class="feature-chips" id="feature-chips"></div>
+              <span class="rail-note" id="feature-summary">6 monitored</span>
             </div>
             <div class="metric-strip" aria-label="Live network metrics">
               <div class="metric"><span>Connected</span><strong id="m-connected">12/12</strong><small>to coordinator</small></div>
@@ -624,6 +642,7 @@
               <label class="layer-toggle"><input type="checkbox" data-layer="packets" checked /><span></span>Data packets</label>
               <label class="layer-toggle"><input type="checkbox" data-layer="coverage" /><span></span>Sensor coverage</label>
               <label class="layer-toggle"><input type="checkbox" data-layer="observations" checked /><span></span>Observations</label>
+              <label class="layer-toggle"><input type="checkbox" data-layer="features" checked /><span></span>Map features</label>
               <label class="layer-toggle"><input type="checkbox" data-layer="labels" checked /><span></span>Labels</label>
               <label class="layer-toggle"><input type="checkbox" data-layer="grid" checked /><span></span>Grid</label>
             </div>

@@ -83,6 +83,8 @@
     networkStep: 0.16,
     maxSevered: 7,
     recordStep: 3.2,
+    sensorRange: 7.4,
+    mapSyncStep: 2.5,
     maxLog: 42
   };
 
@@ -117,6 +119,178 @@
     }
   };
 
+  /* ---------------- shared environmental map ----------------
+     Each map is a monitored area with its own terrain and feature set.
+     Features are refreshed when a connected drone has them in sensor
+     range; otherwise their record ages and is clearly marked stale. */
+
+  const FEATURE_TYPES = {
+    fire: { label: "Fire", color: "#fb7185", rgba: "251, 113, 133", glyph: "flame" },
+    hotspot: { label: "Hotspot", color: "#fbbf24", rgba: "251, 191, 36", glyph: "diamond" },
+    survivor: { label: "Survivor", color: "#34d399", rgba: "52, 211, 153", glyph: "plus" },
+    vehicle: { label: "Vehicle", color: "#38bdf8", rgba: "56, 189, 248", glyph: "square" },
+    flood: { label: "Flood water", color: "#60a5fa", rgba: "96, 165, 250", glyph: "wave" },
+    smoke: { label: "Smoke", color: "#94a3b8", rgba: "148, 163, 184", glyph: "circle" },
+    structure: { label: "Structure", color: "#a78bfa", rgba: "167, 139, 250", glyph: "hex" },
+    hazard: { label: "Hazard", color: "#fb923c", rgba: "251, 146, 60", glyph: "alert" }
+  };
+
+  const MAPS = {
+    wildfire: {
+      id: "wildfire",
+      label: "Wildfire",
+      place: "Sector 04 · Ridge line",
+      hint: "Fire fronts, hotspots and smoke. Watch for wind-driven spread.",
+      palette: {
+        ground: "rgba(120, 53, 15, 0.14)",
+        edge: "rgba(251, 146, 60, 0.28)",
+        line: "rgba(251, 146, 60, 0.12)"
+      },
+      decor: [
+        { kind: "ellipse", x: -5, z: 3, rx: 11, rz: 7, color: "rgba(251, 146, 60, 0.055)" },
+        { kind: "ellipse", x: 6, z: -4, rx: 8, rz: 5, color: "rgba(251, 113, 133, 0.05)" },
+        { kind: "ellipse", x: 0, z: 0, rx: 18, rz: 14, color: "rgba(251, 191, 36, 0.025)" }
+      ],
+      features: [
+        { id: "F1", type: "fire", label: "Fire 1", x: -8.4, z: 4.6, r: 3.4 },
+        { id: "F2", type: "fire", label: "Fire 2", x: 6.8, z: -5.2, r: 2.7 },
+        { id: "S1", type: "survivor", label: "Survivor 1", x: 9.4, z: 6.4, r: 1.1 },
+        { id: "V1", type: "vehicle", label: "Vehicle 1", x: -4.6, z: -8.8, r: 1.3 },
+        { id: "H1", type: "hotspot", label: "Hotspot 1", x: 1.2, z: 9.2, r: 2.2 },
+        { id: "M1", type: "smoke", label: "Smoke 1", x: -11.2, z: -2.4, r: 3.8 }
+      ]
+    },
+    flood: {
+      id: "flood",
+      label: "Flood",
+      place: "Lower basin · River district",
+      hint: "Rising water, stranded people and damaged structures.",
+      palette: {
+        ground: "rgba(30, 64, 120, 0.2)",
+        edge: "rgba(96, 165, 250, 0.34)",
+        line: "rgba(96, 165, 250, 0.13)"
+      },
+      decor: [
+        {
+          kind: "poly",
+          points: [[-20, -7], [-9, -9], [1, -4], [10, -6], [20, -2], [20, 6], [8, 4], [-2, 8], [-13, 5], [-20, 8]],
+          color: "rgba(37, 99, 235, 0.16)"
+        },
+        {
+          kind: "poly",
+          points: [[-20, 9], [-10, 11], [2, 9], [12, 13], [20, 11], [20, 20], [-20, 20]],
+          color: "rgba(56, 189, 248, 0.07)"
+        },
+        { kind: "rect", x1: -16, z1: -16, x2: 16, z2: -13, color: "rgba(148, 163, 184, 0.08)" }
+      ],
+      features: [
+        { id: "W1", type: "flood", label: "Flood 1", x: -7.2, z: 4.2, r: 4.6 },
+        { id: "W2", type: "flood", label: "Flood 2", x: 5.6, z: 5.8, r: 3.6 },
+        { id: "S1", type: "survivor", label: "Survivor 1", x: 8.6, z: -6.4, r: 1.1 },
+        { id: "V1", type: "vehicle", label: "Vehicle 1", x: -2.4, z: -9.2, r: 1.3 },
+        { id: "B1", type: "structure", label: "Bridge 1", x: -10.8, z: -5.6, r: 2.4 },
+        { id: "H1", type: "hazard", label: "Hazard 1", x: 2.8, z: 9.4, r: 1.8 }
+      ]
+    },
+    sar: {
+      id: "sar",
+      label: "Search & rescue",
+      place: "North forest · Trail network",
+      hint: "Two survivors, a support vehicle and an active fire edge.",
+      palette: {
+        ground: "rgba(6, 78, 59, 0.18)",
+        edge: "rgba(52, 211, 153, 0.28)",
+        line: "rgba(52, 211, 153, 0.11)"
+      },
+      decor: [
+        { kind: "ellipse", x: -6, z: -2, rx: 13, rz: 10, color: "rgba(16, 185, 129, 0.06)" },
+        { kind: "ellipse", x: 7, z: 5, rx: 9, rz: 7, color: "rgba(16, 185, 129, 0.05)" },
+        { kind: "rect", x1: -18, z1: -1, x2: 18, z2: 0.2, color: "rgba(148, 163, 184, 0.09)" },
+        { kind: "rect", x1: 0, z1: -18, x2: 1.2, z2: 18, color: "rgba(148, 163, 184, 0.09)" }
+      ],
+      features: [
+        { id: "S1", type: "survivor", label: "Survivor 1", x: -6.8, z: 5.6, r: 1.1 },
+        { id: "S2", type: "survivor", label: "Survivor 2", x: 7.4, z: -5.2, r: 1.1 },
+        { id: "V1", type: "vehicle", label: "Vehicle 1", x: -3.2, z: -8.6, r: 1.3 },
+        { id: "F1", type: "fire", label: "Fire 1", x: 9.2, z: 6.8, r: 2.4 },
+        { id: "B1", type: "structure", label: "Cabin 1", x: -10.4, z: -4.2, r: 2.2 },
+        { id: "H1", type: "hotspot", label: "Hotspot 1", x: 1.6, z: 9.4, r: 1.6 }
+      ]
+    },
+    industrial: {
+      id: "industrial",
+      label: "Industrial",
+      place: "Zone 7 · Plant perimeter",
+      hint: "Chemical hazards, a fire and workers inside a dense site.",
+      palette: {
+        ground: "rgba(76, 29, 149, 0.14)",
+        edge: "rgba(167, 139, 250, 0.3)",
+        line: "rgba(167, 139, 250, 0.11)"
+      },
+      decor: [
+        { kind: "rect", x1: -15, z1: -12, x2: -5, z2: -2, color: "rgba(148, 163, 184, 0.07)" },
+        { kind: "rect", x1: 1, z1: -14, x2: 13, z2: -5, color: "rgba(148, 163, 184, 0.07)" },
+        { kind: "rect", x1: -12, z1: 3, x2: -2, z2: 12, color: "rgba(148, 163, 184, 0.07)" },
+        { kind: "rect", x1: 4, z1: 4, x2: 15, z2: 13, color: "rgba(148, 163, 184, 0.07)" },
+        { kind: "rect", x1: -1, z1: -2, x2: 0.4, z2: 3, color: "rgba(251, 191, 36, 0.1)" }
+      ],
+      features: [
+        { id: "H1", type: "hazard", label: "Hazard 1", x: -7.8, z: 4.8, r: 3.0 },
+        { id: "H2", type: "hazard", label: "Hazard 2", x: 5.6, z: -5.8, r: 2.6 },
+        { id: "F1", type: "fire", label: "Fire 1", x: 7.8, z: 6.2, r: 2.2 },
+        { id: "B1", type: "structure", label: "Plant 1", x: -4.2, z: -8.6, r: 2.0 },
+        { id: "V1", type: "vehicle", label: "Vehicle 1", x: 1.4, z: 8.8, r: 1.2 },
+        { id: "S1", type: "survivor", label: "Worker 1", x: -10.6, z: -2.8, r: 1.1 }
+      ]
+    }
+  };
+
+  const SITUATIONS = {
+    routine: {
+      id: "routine",
+      label: "Routine watch",
+      hint: "Normal patrol. Features refresh whenever a drone has them in range.",
+      sensor: 1,
+      liveFor: 8,
+      staleFor: 18,
+      sync: 1
+    },
+    spread: {
+      id: "spread",
+      label: "Rapid spread",
+      hint: "Hazards expand continuously; unobserved ones spread much faster.",
+      sensor: 1,
+      liveFor: 8,
+      staleFor: 18,
+      sync: 1,
+      spread: 0.055
+    },
+    night: {
+      id: "night",
+      label: "Night search",
+      hint: "Shorter sensor range in the dark. Unobserved records age faster.",
+      sensor: 0.64,
+      liveFor: 6,
+      staleFor: 14,
+      sync: 0.8,
+      drift: true,
+      night: true
+    },
+    blackout: {
+      id: "blackout",
+      label: "Comms blackout",
+      hint: "Degraded uplink. The shared map syncs slowly and freshness decays.",
+      sensor: 0.78,
+      liveFor: 5,
+      staleFor: 12,
+      sync: 0.32
+    }
+  };
+
+  const currentMap = () => MAPS[state.mapId] || MAPS.wildfire;
+  const currentSituation = () => SITUATIONS[state.situation] || SITUATIONS.routine;
+
+
   /* ---------------- state ---------------- */
 
   const state = {
@@ -125,6 +299,15 @@
     speed: 1,
     seed: 0,
     scenario: null,
+    mapId: "wildfire",
+    situation: "routine",
+    features: [],
+    featureSignature: "",
+    mapSyncAcc: 0,
+    highlightFeature: null,
+    highlightUntil: 0,
+    drillActive: false,
+    drillTimers: [],
     log: [],
     stats: { packets: 0, failovers: 0, reconciliations: 0 },
     uiClock: 0,
@@ -134,6 +317,7 @@
       packets: true,
       coverage: false,
       observations: true,
+      features: true,
       labels: true,
       grid: true
     },
@@ -236,6 +420,74 @@
       d.pos.z = Math.sin(d.angle) * d.radius;
       d.pos.y = d.y + Math.sin(state.time * 0.9 + d.phase) * 0.22;
       if (!d.failed) d.battery = Math.max(18, d.battery - dt * 0.018);
+    }
+  }
+
+  /* ---------------- shared environmental map model ---------------- */
+
+  function makeFeatures() {
+    const map = currentMap();
+    state.features = map.features.map((def, index) => ({
+      id: def.id,
+      type: def.type,
+      label: def.label,
+      homeX: def.x,
+      homeZ: def.z,
+      x: def.x,
+      z: def.z,
+      baseR: def.r,
+      r: def.r,
+      phase: index * 1.73,
+      observedAt: 0,
+      age: 0,
+      confidence: 96,
+      observers: 0,
+      liveState: "live"
+    }));
+    state.featureSignature = "";
+  }
+
+  function updateMapFeatures(dt) {
+    const sit = currentSituation();
+    const range = CFG.sensorRange * sit.sensor;
+    const hazardTypes = { fire: true, flood: true, hotspot: true, hazard: true };
+
+    /* Uplink sync gate: records only refresh on a shared-map sync tick. A slow
+       uplink therefore makes the whole map visibly age between updates. */
+    state.mapSyncAcc += dt * (sit.sync || 1);
+    let syncTick = false;
+    if (state.mapSyncAcc >= CFG.mapSyncStep) {
+      state.mapSyncAcc -= CFG.mapSyncStep;
+      syncTick = true;
+    }
+
+    for (const f of state.features) {
+      if (sit.drift && (f.type === "survivor" || f.type === "vehicle")) {
+        const wave = state.time * 0.11 + f.phase;
+        f.x = f.homeX + Math.cos(wave) * 1.25;
+        f.z = f.homeZ + Math.sin(wave * 0.8) * 1.25;
+      } else {
+        f.x = f.homeX;
+        f.z = f.homeZ;
+      }
+
+      let observers = 0;
+      for (const d of state.activeDrones) {
+        if (!d.connected) continue;
+        if (Math.hypot(d.pos.x - f.x, d.pos.z - f.z) <= range + f.r * 0.25) observers++;
+      }
+      if (observers && syncTick) f.observedAt = state.time;
+      f.observers = observers;
+      f.age = Math.max(0, state.time - f.observedAt);
+      f.confidence = Math.round(clamp(99 - f.age * 3.2, 42, 99));
+      f.liveState = f.age <= sit.liveFor ? "live" : f.age <= sit.staleFor ? "stale" : "lost";
+
+      if (sit.spread && hazardTypes[f.type]) {
+        const grow = f.liveState === "live" ? 0.022 : sit.spread;
+        f.r = Math.min(f.baseR * 2.2, f.r + grow * Math.max(dt, 0));
+      } else {
+        f.r = f.baseR;
+      }
     }
   }
 
@@ -485,6 +737,11 @@
     runCopy: $("#run-copy"),
     runExport: $("#run-export"),
     runCsv: $("#run-csv"),
+    mapOptions: $("#map-options"),
+    situationOptions: $("#situation-options"),
+    featureChips: $("#feature-chips"),
+    featureSummary: $("#feature-summary"),
+    runDrill: $("#run-drill"),
     inspector: $("#inspector"),
     inspectorMode: $("#inspector-mode"),
     eventLog: $("#event-log"),
@@ -558,6 +815,106 @@
       refs.state.textContent = label;
     }
     el.fleetCount.textContent = active + " units";
+  }
+
+  /* ---------------- map & situation controls ---------------- */
+
+  function buildEnvControls() {
+    if (el.mapOptions) {
+      el.mapOptions.innerHTML = "";
+      for (const map of Object.values(MAPS)) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "env-button";
+        btn.dataset.map = map.id;
+        btn.textContent = map.label;
+        btn.title = map.place + " — " + map.hint;
+        btn.addEventListener("click", () => setMap(map.id));
+        el.mapOptions.appendChild(btn);
+      }
+    }
+    if (el.situationOptions) {
+      el.situationOptions.innerHTML = "";
+      for (const sit of Object.values(SITUATIONS)) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "env-button";
+        btn.dataset.situation = sit.id;
+        btn.textContent = sit.label;
+        btn.title = sit.hint;
+        btn.addEventListener("click", () => setSituation(sit.id));
+        el.situationOptions.appendChild(btn);
+      }
+    }
+    updateEnvControls();
+    updateDrillButton();
+  }
+
+  function updateEnvControls() {
+    $$("#map-options [data-map]").forEach((btn) => {
+      const active = btn.dataset.map === state.mapId;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-pressed", String(active));
+    });
+    $$("#situation-options [data-situation]").forEach((btn) => {
+      const active = btn.dataset.situation === state.situation;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-pressed", String(active));
+    });
+  }
+
+  function highlightFeature(id) {
+    const f = state.features.find((x) => x.id === id);
+    if (!f) return;
+    state.highlightFeature = id;
+    state.highlightUntil = performance.now() / 1000 + 3.2;
+    const type = FEATURE_TYPES[f.type] || FEATURE_TYPES.hotspot;
+    toast(
+      f.label + " · " + type.label + " · " + f.liveState + " · " + Math.round(f.age) + "s old",
+      f.liveState === "live" ? "ok" : "warn"
+    );
+  }
+
+  function updateFeatureRail(force) {
+    if (!el.featureChips) return;
+    const sig =
+      state.mapId +
+      "|" +
+      state.situation +
+      "|" +
+      state.features.map((f) => f.id + f.liveState + Math.round(f.age)).join(",");
+    if (!force && sig === state.featureSignature) return;
+    state.featureSignature = sig;
+
+    const counts = { live: 0, stale: 0, lost: 0 };
+    const frag = document.createDocumentFragment();
+    for (const f of state.features) {
+      if (counts[f.liveState] !== undefined) counts[f.liveState]++;
+      const type = FEATURE_TYPES[f.type] || FEATURE_TYPES.hotspot;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "feature-chip " + f.liveState;
+      btn.dataset.feature = f.id;
+      btn.title = type.label + " — " + f.liveState + ", " + Math.round(f.age) + "s old";
+      btn.innerHTML =
+        '<span class="chip-dot" style="--dot:' + type.color + '"></span>' +
+        '<span class="chip-name">' + f.label + "</span>" +
+        '<span class="chip-state">' +
+        (f.liveState === "live" ? "live " + Math.max(0, Math.round(f.age)) + "s" : Math.round(f.age) + "s ago") +
+        "</span>";
+      btn.addEventListener("click", () => highlightFeature(f.id));
+      frag.appendChild(btn);
+    }
+    el.featureChips.innerHTML = "";
+    el.featureChips.appendChild(frag);
+    if (el.featureSummary) {
+      el.featureSummary.textContent =
+        counts.live +
+        " live" +
+        (counts.stale ? " · " + counts.stale + " stale" : "") +
+        (counts.lost ? " · " + counts.lost + " lost" : "");
+      el.featureSummary.className = "rail-note" + (counts.lost ? " bad" : counts.stale ? " warn" : "");
+    }
   }
 
   function selectNode(id, focusCanvas = false) {
@@ -960,6 +1317,8 @@
   function restoreAll() {
     const hadBuffer = state.buffered > 0;
     clearFaults();
+    for (const f of state.features) f.observedAt = state.time;
+    state.mapSyncAcc = 0;
     computeNetwork();
     state.selected = null;
     logEvent("Restore accepted — links re-established, records reconciling", "ok");
@@ -995,14 +1354,41 @@
     syncURL();
   }
 
+  function setMap(id) {
+    if (!MAPS[id] || id === state.mapId) return;
+    resetSim({ map: id, silent: true });
+    const map = currentMap();
+    logEvent("Map loaded · " + map.label + " — " + map.place, "ok");
+    toast("Map: " + map.label + ". " + map.hint, "");
+    updateRunMeta();
+    syncURL();
+  }
+
+  function setSituation(id) {
+    if (!SITUATIONS[id] || id === state.situation) return;
+    resetSim({ situation: id, silent: true });
+    const sit = currentSituation();
+    logEvent("Situation set · " + sit.label, sit.id === "routine" ? "ok" : "warn");
+    toast("Situation: " + sit.label + ". " + sit.hint, sit.id === "routine" ? "ok" : "warn");
+    updateRunMeta();
+    syncURL();
+  }
+
   function resetSim(options) {
     const opts = options || {};
+    clearDrill();
     if (opts.seed !== undefined) {
       const next = normalizeSeed(opts.seed);
       if (next !== null) state.seed = next;
     }
     if (opts.scenario !== undefined) {
       state.scenario = opts.scenario && SCENARIOS[opts.scenario] ? opts.scenario : null;
+    }
+    if (opts.map !== undefined) {
+      state.mapId = MAPS[opts.map] ? opts.map : state.mapId;
+    }
+    if (opts.situation !== undefined) {
+      state.situation = SITUATIONS[opts.situation] ? opts.situation : state.situation;
     }
     setSeed(state.seed);
     state.time = 0;
@@ -1012,6 +1398,7 @@
     state.buffered = 0;
     state.recordAcc = 0;
     state.netAcc = 0;
+    state.mapSyncAcc = 0;
     state.packets = [];
     state.packetAcc = 0;
     state.replicaAge = 0.2;
@@ -1020,6 +1407,8 @@
     state.view = "command";
     state.recall = false;
     state.stats = { packets: 0, failovers: 0, reconciliations: 0 };
+    state.highlightFeature = null;
+    state.highlightUntil = 0;
     clearFaults();
     makeStars();
     for (const d of state.drones) {
@@ -1031,14 +1420,21 @@
       d.battery = Math.round(rand(72, 97));
       d.phase = rand(0, TAU);
     }
+    makeFeatures();
     setCamera("overview");
     setView("command", true);
     updatePauseButton();
     updateSpeedButtons();
     computeNetwork();
+    updateMapFeatures(0);
     initLogs();
     if (state.scenario) applyScenarioFaults(state.scenario);
     logEvent("Simulation reset — 12 drones re-registered · seed " + state.seed, "ok");
+    logEvent(
+      "Shared map · " + currentMap().label + " — " +
+        state.features.length + " monitored features · " + currentSituation().label,
+      "ok"
+    );
     updateUI(true);
     updateRunMeta();
     syncURL();
@@ -1052,7 +1448,66 @@
     }
   }
 
+  function updateDrillButton() {
+    if (!el.runDrill) return;
+    el.runDrill.classList.toggle("is-active", state.drillActive);
+    el.runDrill.setAttribute("aria-pressed", String(state.drillActive));
+    const label = el.runDrill.querySelector("span");
+    if (label) label.textContent = state.drillActive ? "Drill running" : "Run drill";
+  }
+
+  function clearDrill() {
+    if (state.drillTimers && state.drillTimers.length) {
+      for (const id of state.drillTimers) clearTimeout(id);
+      state.drillTimers = [];
+    }
+    state.drillActive = false;
+    updateDrillButton();
+  }
+
+  function scheduleDrill(fn, ms) {
+    const id = setTimeout(() => {
+      if (!state.drillActive) return;
+      fn();
+    }, ms);
+    state.drillTimers.push(id);
+  }
+
+  function runDrill() {
+    clearDrill();
+    state.drillActive = true;
+    updateDrillButton();
+    setView("command", true);
+    logEvent("Automated failure drill started — link partition, then drone loss, then recovery", "warn");
+    toast("Automated drill started. Watch the shared map age, then recover.", "warn");
+
+    scheduleDrill(() => {
+      state.storm = true;
+      computeNetwork();
+      logEvent("Drill · eastern corridor partitioned by storm", "warn");
+      toast("Drill: mesh partitioned. Local coordination engaged.", "warn");
+      updateUI(true);
+    }, 900);
+
+    scheduleDrill(() => {
+      computeNetwork();
+      failDrone(null, true);
+      setView("command", true);
+      logEvent("Drill · drone lost — its coverage area will go stale", "bad");
+      toast("Drill: a drone is down. Its map coverage is now aging.", "warn");
+    }, 2800);
+
+    scheduleDrill(() => {
+      restoreAll();
+      clearDrill();
+      logEvent("Automated failure drill complete — all records reconciled", "ok");
+      toast("Drill complete. Links restored and the shared map reconciled.", "ok");
+      updateUI(true);
+    }, 7000);
+  }
+
   function runAction(action) {
+    if (state.drillActive) clearDrill();
     switch (action) {
       case "severLink":
         severLink();
@@ -1192,6 +1647,8 @@
     });
 
     updateFleet();
+    updateEnvControls();
+    updateFeatureRail(force);
     updateInspector(force);
     if (state.view === "topology") {
       $$("[data-camera]").forEach((b) => {
@@ -1249,6 +1706,8 @@
     url.searchParams.set("seed", String(state.seed));
     if (state.scenario) url.searchParams.set("scenario", state.scenario);
     else url.searchParams.delete("scenario");
+    url.searchParams.set("map", state.mapId);
+    url.searchParams.set("situation", state.situation);
     if (anchor && !url.hash) url.hash = "simulator";
     return url.toString();
   }
@@ -1268,6 +1727,10 @@
     state.seed = parsed !== null ? parsed : makeSeed();
     const scenarioParam = (params.get("scenario") || "").toLowerCase();
     state.scenario = SCENARIOS[scenarioParam] ? scenarioParam : null;
+    const mapParam = (params.get("map") || "").toLowerCase();
+    state.mapId = MAPS[mapParam] ? mapParam : "wildfire";
+    const situationParam = (params.get("situation") || "").toLowerCase();
+    state.situation = SITUATIONS[situationParam] ? situationParam : "routine";
   }
 
   async function copyRunLink() {
@@ -1339,6 +1802,23 @@
         replicaAgeSeconds: Number(state.replicaAge.toFixed(2))
       },
       map: {
+        id: state.mapId,
+        label: currentMap().label,
+        place: currentMap().place,
+        situation: {
+          id: state.situation,
+          label: currentSituation().label
+        },
+        features: state.features.map((f) => ({
+          id: f.id,
+          type: f.type,
+          label: f.label,
+          state: f.liveState,
+          ageSeconds: Math.round(f.age * 10) / 10,
+          confidence: f.confidence,
+          observers: f.observers,
+          radius: Math.round(f.r * 10) / 10
+        })),
         records: Math.round(state.records),
         buffered: Math.round(state.buffered),
         freshestSeconds: state.freshest ? Math.round(state.freshest) : null
@@ -1415,6 +1895,13 @@
       ["seed", s.seed],
       ["scenario", s.scenario ? s.scenario.id : "free"],
       ["scenario_label", s.scenario ? s.scenario.label : "Free run"],
+      ["map_id", s.map.id],
+      ["map_label", s.map.label],
+      ["situation_id", s.map.situation.id],
+      ["situation_label", s.map.situation.label],
+      ["features_live", s.map.features.filter((f) => f.state === "live").length],
+      ["features_stale", s.map.features.filter((f) => f.state === "stale").length],
+      ["features_lost", s.map.features.filter((f) => f.state === "lost").length],
       ["clock_seconds", s.clock.seconds],
       ["clock_label", s.clock.label],
       ["state", s.state],
@@ -1496,6 +1983,7 @@
   function updateSim(dt) {
     state.time += dt;
     updateDronePositions(dt);
+    updateMapFeatures(dt);
 
     if (state.handoverTimer > 0) {
       state.handoverTimer = Math.max(0, state.handoverTimer - dt);
@@ -1534,7 +2022,8 @@
     state.recordAcc += dt;
     if (state.recordAcc >= CFG.recordStep) {
       state.recordAcc -= CFG.recordStep;
-      if (state.acting) state.records += state.connectedCount;
+      const syncRate = currentSituation().sync || 1;
+      if (state.acting) state.records += state.connectedCount * syncRate;
       state.buffered += state.groupMembers;
       if (state.groupMembers > 0) {
         // Keep the buffered figure readable during long partitions.
@@ -1709,7 +2198,265 @@
     vg.addColorStop(1, "rgba(0,0,0,0.5)");
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, W, H);
+
+    const sit = currentSituation();
+    if (sit.night) {
+      ctx.fillStyle = "rgba(3, 7, 18, 0.32)";
+      ctx.fillRect(0, 0, W, H);
+    } else if (sit.id === "blackout") {
+      ctx.fillStyle = "rgba(8, 4, 20, 0.16)";
+      ctx.fillRect(0, 0, W, H);
+    }
   }
+
+  /* ---------------- environmental map rendering ---------------- */
+
+  function drawGroundShape(points, y, fill, stroke) {
+    const ctx = state.ctx;
+    const projected = points.map((p) => projectPoint({ x: p[0], y: y, z: p[1] }));
+    if (!projected.every(Boolean)) return;
+    ctx.beginPath();
+    ctx.moveTo(projected[0].x, projected[0].y);
+    for (let i = 1; i < projected.length; i++) ctx.lineTo(projected[i].x, projected[i].y);
+    ctx.closePath();
+    if (fill) {
+      ctx.fillStyle = fill;
+      ctx.fill();
+    }
+    if (stroke) {
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+
+  function ellipsePoints(cx, cz, rx, rz, segments) {
+    const pts = [];
+    const n = segments || 48;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU;
+      pts.push([cx + Math.cos(a) * rx, cz + Math.sin(a) * rz]);
+    }
+    return pts;
+  }
+
+  function drawMapGround(t) {
+    const map = currentMap();
+    const ctx = state.ctx;
+
+    drawGroundShape(
+      [[-19.5, -19.5], [19.5, -19.5], [19.5, 19.5], [-19.5, 19.5]],
+      0.005,
+      map.palette.ground,
+      map.palette.edge
+    );
+
+    for (const decor of map.decor || []) {
+      if (decor.kind === "ellipse") {
+        drawGroundShape(ellipsePoints(decor.x, decor.z, decor.rx, decor.rz, 52), 0.008, decor.color, null);
+      } else if (decor.kind === "poly") {
+        drawGroundShape(decor.points, 0.008, decor.color, null);
+      } else if (decor.kind === "rect") {
+        drawGroundShape(
+          [[decor.x1, decor.z1], [decor.x2, decor.z1], [decor.x2, decor.z2], [decor.x1, decor.z2]],
+          0.008,
+          decor.color,
+          null
+        );
+      }
+    }
+
+    ctx.strokeStyle = map.palette.line;
+    ctx.lineWidth = 1;
+    for (let i = 1; i <= 3; i++) {
+      const pts = ellipsePoints(0, 0, i * 6.2, i * 6.2, 64);
+      const projected = pts.map((p) => projectPoint({ x: p[0], y: 0.012, z: p[1] }));
+      if (!projected.every(Boolean)) continue;
+      ctx.beginPath();
+      ctx.moveTo(projected[0].x, projected[0].y);
+      for (let k = 1; k < projected.length; k++) ctx.lineTo(projected[k].x, projected[k].y);
+      ctx.closePath();
+      ctx.stroke();
+    }
+
+    const corner = projectPoint({ x: -19.5, y: 0.02, z: -19.5 });
+    if (corner && state.layers.labels) {
+      ctx.fillStyle = map.palette.edge;
+      ctx.font = "8px 'JetBrains Mono', monospace";
+      ctx.textAlign = "left";
+      ctx.fillText(map.place.toUpperCase(), corner.x + 6, corner.y - 6);
+    }
+  }
+
+  function drawFeatureGlyph(x, y, size, type, liveState, t, phase) {
+    const ctx = state.ctx;
+    const glyph = type.glyph;
+    const alpha = liveState === "live" ? 1 : liveState === "stale" ? 0.72 : 0.46;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = type.color;
+    ctx.fillStyle = type.color;
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = type.color;
+    ctx.shadowBlur = liveState === "live" ? 10 : 3;
+
+    if (glyph === "flame") {
+      ctx.beginPath();
+      ctx.moveTo(0, -size);
+      ctx.quadraticCurveTo(size * 0.85, -size * 0.2, size * 0.4, size * 0.75);
+      ctx.quadraticCurveTo(0, size * 0.3, -size * 0.4, size * 0.75);
+      ctx.quadraticCurveTo(-size * 0.85, -size * 0.2, 0, -size);
+      ctx.fill();
+    } else if (glyph === "plus") {
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(-size * 0.75, 0);
+      ctx.lineTo(size * 0.75, 0);
+      ctx.moveTo(0, -size * 0.75);
+      ctx.lineTo(0, size * 0.75);
+      ctx.stroke();
+    } else if (glyph === "square") {
+      ctx.beginPath();
+      ctx.rect(-size * 0.65, -size * 0.65, size * 1.3, size * 1.3);
+      ctx.fill();
+    } else if (glyph === "wave") {
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 0.72, 0, TAU);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(-size * 0.25, 0, size * 0.36, -Math.PI / 2, Math.PI / 2);
+      ctx.arc(size * 0.25, 0, size * 0.36, Math.PI / 2, -Math.PI / 2);
+      ctx.stroke();
+    } else if (glyph === "circle") {
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 0.68, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = alpha * 0.4;
+      ctx.beginPath();
+      ctx.arc(0, 0, size * (1.1 + 0.15 * Math.sin(t * 1.4 + phase)), 0, TAU);
+      ctx.stroke();
+    } else if (glyph === "hex") {
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = -Math.PI / 2 + (i / 6) * TAU;
+        const px = Math.cos(a) * size * 0.8;
+        const py = Math.sin(a) * size * 0.8;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+    } else if (glyph === "alert") {
+      ctx.beginPath();
+      ctx.moveTo(0, -size);
+      ctx.lineTo(size * 0.9, size * 0.75);
+      ctx.lineTo(-size * 0.9, size * 0.75);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "#08131f";
+      ctx.shadowBlur = 0;
+      ctx.font = "bold " + Math.max(8, size * 1.25) + "px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("!", 0, size * 0.1);
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(0, -size * 0.85);
+      ctx.lineTo(size * 0.85, 0);
+      ctx.lineTo(0, size * 0.85);
+      ctx.lineTo(-size * 0.85, 0);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawFeatures(t) {
+    if (!state.layers.features) return;
+    const ctx = state.ctx;
+    const now = performance.now() / 1000;
+    const items = [];
+    for (const f of state.features) {
+      const ground = projectPoint({ x: f.x, y: 0.03, z: f.z });
+      if (!ground) continue;
+      items.push({ f, ground, z: ground.z });
+    }
+    items.sort((a, b) => b.z - a.z);
+
+    for (const { f, ground } of items) {
+      const type = FEATURE_TYPES[f.type] || FEATURE_TYPES.hotspot;
+      const live = f.liveState === "live";
+      const stale = f.liveState === "stale";
+      const highlighted = state.highlightFeature === f.id && now < state.highlightUntil;
+      const pulse = 0.5 + 0.5 * Math.sin(t * 1.6 + f.phase);
+
+      const ring = f.r * (1 + (live ? pulse * 0.025 : 0));
+      const pts = ellipsePoints(f.x, f.z, ring, ring, 44);
+      const projected = pts.map((p) => projectPoint({ x: p[0], y: 0.03, z: p[1] }));
+      if (projected.every(Boolean)) {
+        ctx.beginPath();
+        ctx.moveTo(projected[0].x, projected[0].y);
+        for (let i = 1; i < projected.length; i++) ctx.lineTo(projected[i].x, projected[i].y);
+        ctx.closePath();
+        ctx.fillStyle = "rgba(" + type.rgba + ", " + (live ? 0.09 : stale ? 0.045 : 0.025) + ")";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(" + type.rgba + ", " + (live ? 0.5 : stale ? 0.28 : 0.14) + ")";
+        ctx.lineWidth = live ? 1.2 : 1;
+        if (!live) ctx.setLineDash([4, 5]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        if (live) {
+          ctx.strokeStyle = "rgba(" + type.rgba + ", " + (0.12 + pulse * 0.16) + ")";
+          ctx.beginPath();
+          ctx.arc(ground.x, ground.y, f.r * ground.scale * 0.72 + pulse * 14, 0, TAU);
+          ctx.stroke();
+        }
+      }
+
+      const top = projectPoint({ x: f.x, y: 3.4 + (live ? pulse * 0.25 : 0), z: f.z });
+      if (!top) continue;
+      const beacon = ctx.createLinearGradient(ground.x, ground.y, top.x, top.y);
+      beacon.addColorStop(0, "rgba(" + type.rgba + ", " + (live ? 0.32 : 0.1) + ")");
+      beacon.addColorStop(1, "rgba(" + type.rgba + ", " + (live ? 0.05 : 0.02) + ")");
+      ctx.strokeStyle = beacon;
+      ctx.lineWidth = 1;
+      ctx.setLineDash(stale || !live ? [3, 4] : []);
+      ctx.beginPath();
+      ctx.moveTo(ground.x, ground.y);
+      ctx.lineTo(top.x, top.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      if (highlighted) {
+        ctx.strokeStyle = "rgba(" + type.rgba + ", 0.85)";
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(top.x, top.y, 16 + pulse * 6, 0, TAU);
+        ctx.stroke();
+      }
+
+      const size = clamp(top.scale * 0.11, 4.4, 9);
+      drawFeatureGlyph(top.x, top.y, size, type, f.liveState, t, f.phase);
+
+      if (state.layers.labels) {
+        const stateLabel = live ? "LIVE" : stale ? "STALE" : "LOST";
+        const label = f.label.toUpperCase() + " · " + stateLabel + " · " + f.confidence + "%";
+        ctx.font = "8px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        const tw = ctx.measureText(label).width;
+        ctx.fillStyle = "rgba(4, 12, 20, 0.62)";
+        ctx.fillRect(top.x - tw / 2 - 4, top.y - 22, tw + 8, 12);
+        ctx.fillStyle = live
+          ? "rgba(" + type.rgba + ", 0.95)"
+          : stale
+            ? "rgba(251, 191, 36, 0.85)"
+            : "rgba(251, 113, 133, 0.8)";
+        ctx.fillText(label, top.x, top.y - 13);
+      }
+    }
+  }
+
 
   function drawGrid() {
     if (!state.layers.grid) return;
@@ -2321,6 +3068,7 @@
 
   function renderCommand(t) {
     drawBackdrop(t);
+    drawMapGround(t);
     drawGrid();
     drawBeam();
     drawCoverage();
@@ -2331,6 +3079,7 @@
       for (const packet of state.packets) drawPacket(packet, t);
     }
 
+    drawFeatures(t);
     drawGroupHalos();
     drawObservations(t);
 
@@ -2377,11 +3126,18 @@
     ctx.lineTo(W - m, H - m - len);
     ctx.stroke();
 
+    const map = currentMap();
+    const sit = currentSituation();
+    ctx.textAlign = "right";
+    ctx.font = "8px 'JetBrains Mono', monospace";
+    ctx.fillStyle = map.palette.edge;
+    ctx.fillText(map.label.toUpperCase() + " · " + sit.label.toUpperCase(), W - 18, 21);
+
     if (state.layers.grid) {
       ctx.fillStyle = "rgba(85, 112, 132, 0.65)";
       ctx.font = "8px 'JetBrains Mono', monospace";
       ctx.textAlign = "right";
-      ctx.fillText("LAT 34.12 N · LON 118.24 W", W - 18, H - 20);
+      ctx.fillText(map.place.toUpperCase(), W - 18, H - 20);
       ctx.textAlign = "left";
       ctx.fillText("SIMULATED / SOFTWARE ONLY", 18, H - 20);
     }
@@ -3046,6 +3802,7 @@
     if (el.runCopy) el.runCopy.addEventListener("click", copyRunLink);
     if (el.runExport) el.runExport.addEventListener("click", exportRunJSON);
     if (el.runCsv) el.runCsv.addEventListener("click", exportRunCSV);
+    if (el.runDrill) el.runDrill.addEventListener("click", runDrill);
     updatePauseButton();
     updateSpeedButtons();
 
@@ -3166,11 +3923,14 @@
     setSeed(state.seed);
     makeStars();
     makeDrones();
+    makeFeatures();
     setupCanvas();
     buildFleet();
+    buildEnvControls();
     bindUI();
     initLogs();
     computeNetwork();
+    updateMapFeatures(0);
     if (state.scenario) applyScenarioFaults(state.scenario);
     setCamera("overview");
     updatePauseButton();
@@ -3178,6 +3938,11 @@
     updateUI(true);
     updateRunMeta();
     syncURL();
+    logEvent(
+      "Shared map online · " + currentMap().label + " — " +
+        state.features.length + " monitored features · " + currentSituation().label,
+      "ok"
+    );
     if (state.scenario) {
       logEvent("Run loaded from link · seed " + state.seed + " · " + SCENARIOS[state.scenario].label, "ok");
       toast(SCENARIOS[state.scenario].toast, "warn");
