@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://h1x4x.github.io/nexus-ai/sitemap.xml

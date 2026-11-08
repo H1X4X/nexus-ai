@@ -2994,6 +2994,17 @@ kbd {
   .canvas-hint { display: none; }
   .env-bar { padding: 8px 11px; gap: 7px 12px; }
   .env-group { flex: 1 1 100%; }
+  /* With 8 maps the selector scrolls sideways on phones instead of
+     growing the bar into a wall of buttons. */
+  .env-options {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    max-width: 100%;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .env-options::-webkit-scrollbar { display: none; }
+  .env-button { flex: none; }
   .env-drill { margin-left: 0; }
   .feature-rail { padding: 7px 11px; }
   .rail-label { width: 100%; }

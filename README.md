@@ -24,6 +24,7 @@ Open `index.html` directly in a browser, or serve this folder with any static fi
 - **Space** — pause or resume the simulation
 - **R** — reset
 - **1–4** — switch camera presets (`1` Overview, `2` Top-down, `3` East front, `4` Orbit)
+- **Arrow keys** — orbit (←→ yaw, ↑ top-down / ↓ horizon), **+ / −** zoom, **0** back to Overview (active while the simulator is on screen)
 - **Esc** — clear the current selection
 - **Drag up** — lift the camera to top-down; drag sideways for a full **360° orbit** at a stable height, scroll to zoom, right-drag (or Shift-drag) to pan. The camera never drops to the flat horizon where the terrain vanishes. Camera preset buttons stay visible on small screens, so **Top-down** is one tap and **Orbit** (`4`) auto-rotates a full turn in about 14 seconds (grab the canvas to take over).
 
@@ -59,6 +60,9 @@ Reset keeps the current seed, scenario, map, and situation, so a run can be repl
 ```text
 index.html
 favicon.svg
+LICENSE
+robots.txt
+sitemap.xml
 assets/
   styles.css
   app.js

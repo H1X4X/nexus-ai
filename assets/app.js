@@ -5381,6 +5381,26 @@
       } else if (e.key === "1" || e.key === "2" || e.key === "3" || e.key === "4") {
         const names = ["overview", "top", "front", "orbit"];
         setCamera(names[Number(e.key) - 1]);
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "+" || e.key === "=" || e.key === "-" || e.key === "_" || e.key === "0") {
+        // Keyboard camera: only steer while the simulator is on screen so
+        // proposal scrolling keeps working elsewhere on the page.
+        const sim = $("#simulator");
+        let inView = false;
+        if (sim) {
+          const r = sim.getBoundingClientRect();
+          inView = r.top < window.innerHeight && r.bottom > 0;
+        }
+        if (!inView) return;
+        if (state.view !== "command") return;
+        e.preventDefault();
+        cancelAuto();
+        if (e.key === "ArrowLeft") orbitCamera(-14, 0);
+        else if (e.key === "ArrowRight") orbitCamera(14, 0);
+        else if (e.key === "ArrowUp") orbitCamera(0, -30);
+        else if (e.key === "ArrowDown") orbitCamera(0, 30);
+        else if (e.key === "+" || e.key === "=") state.camGoal.dist = clamp(state.camGoal.dist * 0.85, 16, 74);
+        else if (e.key === "-" || e.key === "_") state.camGoal.dist = clamp(state.camGoal.dist * 1.18, 16, 74);
+        else if (e.key === "0") setCamera("overview");
       } else if (e.key === "Escape") {
         if (state.selected) {
           state.selected = null;
