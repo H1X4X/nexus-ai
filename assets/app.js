@@ -4040,7 +4040,7 @@
   function updateCamera(dt) {
     const cam = state.camera;
     const goal = state.camGoal;
-    if (goal.auto && !state.dragging) goal.yaw += dt * 0.14;
+    if (goal.auto && !state.dragging) goal.yaw += dt * 0.45;
     const k = Math.min(1, dt * 8);
     cam.yaw = angleLerp(cam.yaw, goal.yaw, k);
     cam.pitch = lerp(cam.pitch, goal.pitch, k);
@@ -4055,7 +4055,9 @@
   }
 
   function orbitCamera(dx, dy) {
-    state.camGoal.yaw += dx * 0.006;
+    // ~0.011 rad/px: a single drag across the canvas (~570 px) covers a
+    // full 360° orbit without re-grabbing.
+    state.camGoal.yaw += dx * 0.011;
     // Drag up (negative dy) lifts the camera toward top-down; drag down
     // brings it to horizon level. Previously the sign was inverted, which
     // made "drag up to see from up" go the wrong way.
