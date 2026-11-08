@@ -2981,7 +2981,9 @@ kbd {
   .fleet-list { max-height: 210px; }
   .event-log { max-height: 220px; }
   .stage-toolbar { padding: 9px 11px; }
-  .camera-presets { display: none; }
+  /* Keep camera presets visible on small screens so Top-down is one tap away. */
+  .camera-presets { display: inline-flex; gap: 3px; }
+  .camera-presets button { padding: 5px 7px; }
   .canvas-hint { display: none; }
   .env-bar { padding: 8px 11px; gap: 7px 12px; }
   .env-group { flex: 1 1 100%; }

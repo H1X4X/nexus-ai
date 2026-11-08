@@ -2171,7 +2171,7 @@
       el.canvasHint.textContent =
         state.view === "topology"
           ? "Click a node to inspect it · drag the map to pan"
-          : "Drag to orbit · scroll to zoom · right-drag to pan · click a node";
+          : "Drag up for top-down · drag to orbit · scroll to zoom · right-drag to pan";
       el.canvasHint.classList.remove("is-hidden");
     }
     if (!silent) {
@@ -4056,7 +4056,10 @@
 
   function orbitCamera(dx, dy) {
     state.camGoal.yaw += dx * 0.006;
-    state.camGoal.pitch = clamp(state.camGoal.pitch + dy * 0.005, 0.06, 1.52);
+    // Drag up (negative dy) lifts the camera toward top-down; drag down
+    // brings it to horizon level. Previously the sign was inverted, which
+    // made "drag up to see from up" go the wrong way.
+    state.camGoal.pitch = clamp(state.camGoal.pitch - dy * 0.0065, 0.06, 1.52);
     state.camera.yaw = state.camGoal.yaw;
     state.camera.pitch = state.camGoal.pitch;
   }

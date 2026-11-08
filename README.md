@@ -23,8 +23,9 @@ Open `index.html` directly in a browser, or serve this folder with any static fi
 
 - **Space** — pause or resume the simulation
 - **R** — reset
-- **1–4** — switch camera presets
+- **1–4** — switch camera presets (`1` Overview, `2` Top-down, `3` East front, `4` Orbit)
 - **Esc** — clear the current selection
+- **Drag up** — lift the camera to top-down; drag to orbit, scroll to zoom, right-drag (or Shift-drag) to pan. Camera preset buttons stay visible on small screens, so **Top-down** is one tap.
 
 Use the fault buttons to sever links, create interference or a storm partition, fail a drone, or take down the Main or Backup AI. Use **Restore everything** to watch the mesh and buffered records reconcile.
 
