@@ -2442,13 +2442,20 @@ html.js-anim .reveal.is-visible { opacity: 1; transform: none; }
   overflow: hidden;
   touch-action: none;
 }
+#ops-canvas-3d,
 #ops-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   display: block;
   cursor: grab;
   outline: none;
 }
+#ops-canvas-3d { z-index: 1; }
+#ops-canvas { z-index: 2; }
+#ops-canvas-3d.is-dragging,
 #ops-canvas.is-dragging { cursor: grabbing; }
 #ops-canvas.is-picking { cursor: crosshair; }
 

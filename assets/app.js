@@ -504,6 +504,7 @@
       roads: terr.roads, waterLevel: terr.waterLevel
     };
     state.terrainSignature = mapId;
+    if (state.three && state.three.ready) buildThreeMap(mapId);
   }
 
   function mixRGB(a, b, t) {
@@ -577,6 +578,8 @@
     drones: [],
     terrain: null,
     terrainSignature: "",
+    three: null,
+    canvas3d: null,
     camera: { yaw: -0.65, pitch: 0.52, dist: 38, target: [0, 2.4, 0], auto: false },
     camGoal: { yaw: -0.65, pitch: 0.52, dist: 38, target: [0, 2.4, 0], auto: false },
     dragging: false,
@@ -650,7 +653,6 @@
   /* ---------------- shared environmental map model ---------------- */
 
   function makeFeatures() {
-    buildTerrain(state.mapId);
     const map = currentMap();
     state.features = map.features.map((def, index) => ({
       id: def.id,
@@ -670,6 +672,8 @@
       liveState: "live"
     }));
     state.featureSignature = "";
+    // Build terrain AFTER features so the 3D feature markers match this map.
+    buildTerrain(state.mapId);
   }
 
   function updateMapFeatures(dt) {
@@ -2166,6 +2170,7 @@
 
   function setView(view, silent) {
     state.view = view === "topology" ? "topology" : "command";
+    updateCanvasMode();
     updateUI(true);
     if (el.canvasHint) {
       el.canvasHint.textContent =
@@ -2325,7 +2330,10 @@
     state.canvas = $("#ops-canvas");
     if (!state.canvas) return;
     state.ctx = state.canvas.getContext("2d");
+    state.canvas3d = $("#ops-canvas-3d");
     resizeCanvas();
+    initThree();
+    updateCanvasMode();
     if ("ResizeObserver" in window) {
       const ro = new ResizeObserver(() => resizeCanvas());
       ro.observe(state.canvas.parentElement);
@@ -2348,6 +2356,16 @@
     if (c.width !== pw || c.height !== ph) {
       c.width = pw;
       c.height = ph;
+    }
+    resizeThree();
+  }
+
+  function updateCanvasMode() {
+    const use3d = state.view === "command" && !!(state.three && state.three.ready);
+    if (state.canvas3d) state.canvas3d.style.display = use3d ? "block" : "none";
+    if (state.canvas) {
+      state.canvas.style.pointerEvents = use3d ? "none" : "auto";
+      state.canvas.style.cursor = use3d ? "" : "";
     }
   }
 
@@ -2803,6 +2821,766 @@
       ctx.textAlign = "left";
       ctx.fillText(map.place.toUpperCase(), corner.x + 6, corner.y - 6);
     }
+  }
+
+  /* ============================================================
+     Three.js battlefield map (Arena-style true 3D)
+     Reuses the same sim state, terrain cache and camera goal as the
+     2D fallback, but renders real WebGL geometry: hillfield terrain,
+     water, instanced forests/rocks, buildings, roads, bases, drones,
+     links, packets, feature truth + shared-map markers. Falls back
+     to the 2D canvas automatically if THREE/WebGL is unavailable.
+     ============================================================ */
+
+  function threeAvailable() {
+    return typeof THREE !== "undefined" && !!(state.canvas3d && state.three && state.three.ready);
+  }
+
+  function disposeGroup(group) {
+    if (!group) return;
+    group.traverse((obj) => {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) {
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        for (const m of mats) {
+          if (m.map) m.map.dispose();
+          m.dispose();
+        }
+      }
+    });
+  }
+
+  function makeLabelTexture(text, color) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 96;
+    const ctx = canvas.getContext("2d");
+    drawLabelCanvas(ctx, text, color);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.LinearFilter;
+    return { canvas, ctx, tex, text, color };
+  }
+
+  function drawLabelCanvas(ctx, text, color) {
+    const W = ctx.canvas.width, H = ctx.canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = "600 38px 'JetBrains Mono', monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const padX = 22, padY = 14;
+    const tw = ctx.measureText(text).width;
+    const bw = Math.min(W - 8, tw + padX * 2);
+    const bh = 58;
+    const bx = (W - bw) / 2, by = (H - bh) / 2;
+    ctx.fillStyle = "rgba(4, 12, 20, 0.78)";
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    const r = 12;
+    ctx.moveTo(bx + r, by);
+    ctx.lineTo(bx + bw - r, by);
+    ctx.quadraticCurveTo(bx + bw, by, bx + bw, by + r);
+    ctx.lineTo(bx + bw, by + bh - r);
+    ctx.quadraticCurveTo(bx + bw, by + bh, bx + bw - r, by + bh);
+    ctx.lineTo(bx + r, by + bh);
+    ctx.quadraticCurveTo(bx, by + bh, bx, by + bh - r);
+    ctx.lineTo(bx, by + r);
+    ctx.quadraticCurveTo(bx, by, bx + r, by);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.fillText(text, W / 2, H / 2 + 1);
+  }
+
+  function makeLabelSprite() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 96;
+    const ctx = canvas.getContext("2d");
+    drawLabelCanvas(ctx, "…", "#67e8f9");
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.LinearFilter;
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(7.5, 1.4, 1);
+    sprite.renderOrder = 999;
+    return { sprite, canvas, ctx, tex, text: "…", color: "#67e8f9" };
+  }
+
+  function setLabelSprite(label, text, color) {
+    if (label.text === text && label.color === color) return;
+    label.text = text;
+    label.color = color;
+    drawLabelCanvas(label.ctx, text, color);
+    label.tex.needsUpdate = true;
+  }
+
+  function makeGlowTexture() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext("2d");
+    const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, "rgba(255,255,255,1)");
+    grad.addColorStop(0.25, "rgba(255,255,255,0.55)");
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 64, 64);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.LinearFilter;
+    return tex;
+  }
+
+  function initThree() {
+    state.three = { ready: false, mapId: "" };
+    const canvas = state.canvas3d;
+    if (!canvas || typeof THREE === "undefined") return;
+    try {
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x050b13);
+      const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 400);
+      const ambient = new THREE.AmbientLight(0x8ab4d8, 0.75);
+      const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+      sun.position.set(30, 50, 22);
+      scene.add(ambient);
+      scene.add(sun);
+      const env = new THREE.Group();
+      scene.add(env);
+      const T = { ready: true, renderer, scene, camera, ambient, sun, env };
+      scene.userData.three = T;
+      state.three = T;
+      buildThreeMap(state.mapId);
+      resizeThree();
+    } catch (e) {
+      state.three = { ready: false, mapId: "" };
+    }
+  }
+
+  function resizeThree() {
+    const T = state.three;
+    if (!T || !T.ready || !state.W || !state.H) return;
+    T.renderer.setSize(state.W, state.H, false);
+    T.camera.aspect = state.W / state.H;
+    T.camera.updateProjectionMatrix();
+  }
+
+  function buildThreeMap(mapId) {
+    const T = state.three;
+    if (!T || !T.ready) return state.three ? true : false;
+    if (!state.terrain || state.terrain.mapId !== mapId) buildTerrain(mapId);
+    if (!state.terrain) return false;
+    if (T.mapId === mapId && T.env && T.env.children.length) return true;
+    // Clear previous map
+    if (T.env) {
+      disposeGroup(T.env);
+      T.scene.remove(T.env);
+    }
+    const env = new THREE.Group();
+    T.scene.add(env);
+    T.env = env;
+    T.mapId = mapId;
+    const terr = MAP_TERRAIN[mapId] || MAP_TERRAIN.wildfire;
+    const cache = state.terrain;
+    const map = MAPS[mapId] || MAPS.wildfire;
+    const wl = cache.waterLevel;
+    // --- terrain ---
+    const SEG = 90;
+    const tGeo = new THREE.PlaneGeometry(39, 39, SEG, SEG);
+    tGeo.rotateX(-Math.PI / 2);
+    const tPos = tGeo.attributes.position;
+    const tCol = new Float32Array(tPos.count * 3);
+    const tColor = new THREE.Color();
+    const tC2 = new THREE.Color();
+    for (let i = 0; i < tPos.count; i++) {
+      const x = tPos.getX(i), z = tPos.getZ(i);
+      const h = terrainHeightFor(mapId, x, z);
+      tPos.setY(i, h);
+      const hL = terrainHeightFor(mapId, x - 1.3, z), hR = terrainHeightFor(mapId, x + 1.3, z);
+      const hT = terrainHeightFor(mapId, x, z - 1.3), hB = terrainHeightFor(mapId, x, z + 1.3);
+      const dhdx = (hR - hL) / 2.6, dhdz = (hB - hT) / 2.6;
+      const inv = 1 / Math.sqrt(dhdx * dhdx + 1 + dhdz * dhdz);
+      const diff = clamp((-dhdx * inv) * 0.45 + inv * 0.8 + (-dhdz * inv) * 0.35, 0, 1);
+      let sc = 0;
+      for (const f of map.features) {
+        if (!{ fire: true, hotspot: true, hazard: true, flood: true }[f.type]) continue;
+        const s2 = clamp(1 - Math.hypot(x - f.x, z - f.z) / (f.r * 2.4), 0, 1);
+        if (s2 > sc) sc = s2;
+      }
+      const tt = clamp((h + 0.3) / 3.6, 0, 1);
+      let cArr = tt < 0.5 ? mixRGB(terr.low, terr.mid, tt * 2) : mixRGB(terr.mid, terr.high, (tt - 0.5) * 2);
+      const k = 0.45 + 0.8 * diff;
+      cArr = [cArr[0] * k, cArr[1] * k, cArr[2] * k];
+      if (sc > 0.01) cArr = mixRGB(cArr, [0.07, 0.05, 0.03], sc * 0.6);
+      const r = Math.max(Math.abs(x), Math.abs(z));
+      const fade = sstep(15.5, 19.5, r);
+      if (fade > 0) cArr = mixRGB(cArr, [0.012, 0.04, 0.07], fade * 0.6);
+      tColor.setRGB(cArr[0], cArr[1], cArr[2]);
+      tCol[i * 3] = tColor.r; tCol[i * 3 + 1] = tColor.g; tCol[i * 3 + 2] = tColor.b;
+    }
+    tGeo.setAttribute("color", new THREE.BufferAttribute(tCol, 3));
+    tGeo.computeVertexNormals();
+    const terrainMesh = new THREE.Mesh(tGeo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+    env.add(terrainMesh);
+    // --- water ---
+    const waterGeo = new THREE.PlaneGeometry(39, 39);
+    waterGeo.rotateX(-Math.PI / 2);
+    const waterMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(terr.water[0], terr.water[1], terr.water[2]),
+      transparent: true, opacity: 0.55, depthWrite: false
+    });
+    const waterMesh = new THREE.Mesh(waterGeo, waterMat);
+    waterMesh.position.y = wl + 0.03;
+    env.add(waterMesh);
+    // --- trees ---
+    const treeGroup = new THREE.Group();
+    env.add(treeGroup);
+    if (cache.trees.length) {
+      const treeGeo = new THREE.ConeGeometry(0.42, 1.5, 6);
+      treeGeo.translate(0, 0.75, 0);
+      const treeMat = new THREE.MeshLambertMaterial({ flatShading: true });
+      const inst = new THREE.InstancedMesh(treeGeo, treeMat, cache.trees.length);
+      const m4 = new THREE.Matrix4();
+      const q = new THREE.Quaternion();
+      const eul = new THREE.Euler();
+      const sv = new THREE.Vector3();
+      const pv = new THREE.Vector3();
+      const cc = new THREE.Color();
+      cache.trees.forEach((tree, i) => {
+        const h = heightAt(tree.x, tree.z);
+        pv.set(tree.x, h + 0.02, tree.z);
+        eul.set(0, tree.scale * 7.3, 0);
+        q.setFromEuler(eul);
+        sv.set(tree.scale, tree.scale * (0.9 + (i % 5) * 0.08), tree.scale);
+        m4.compose(pv, q, sv);
+        inst.setMatrixAt(i, m4);
+        cc.setHSL(tree.hue, tree.sat, tree.light);
+        inst.setColorAt(i, cc);
+      });
+      inst.instanceMatrix.needsUpdate = true;
+      if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
+      treeGroup.add(inst);
+    }
+    // --- rocks ---
+    if (cache.rocks.length) {
+      const rockGeo = new THREE.TetrahedronGeometry(0.32);
+      const rockMat = new THREE.MeshLambertMaterial({ flatShading: true, color: 0x8a9aa8 });
+      const instR = new THREE.InstancedMesh(rockGeo, rockMat, cache.rocks.length);
+      const m4 = new THREE.Matrix4();
+      const q = new THREE.Quaternion();
+      const sv = new THREE.Vector3();
+      const pv = new THREE.Vector3();
+      const cc = new THREE.Color();
+      cache.rocks.forEach((rock, i) => {
+        pv.set(rock.x, heightAt(rock.x, rock.z) + 0.08, rock.z);
+        sv.set(rock.scale, rock.scale * 0.7, rock.scale);
+        m4.compose(pv, q, sv);
+        instR.setMatrixAt(i, m4);
+        const g = 0.45 + rock.shade * 0.35;
+        cc.setRGB(g, g, g + 0.02);
+        instR.setColorAt(i, cc);
+      });
+      instR.instanceMatrix.needsUpdate = true;
+      if (instR.instanceColor) instR.instanceColor.needsUpdate = true;
+      treeGroup.add(instR);
+    }
+    // --- buildings ---
+    const bGroup = new THREE.Group();
+    env.add(bGroup);
+    for (const b of cache.buildings) {
+      const gh = heightAt(b.x, b.z);
+      const geo = new THREE.BoxGeometry(b.w, b.h, b.d);
+      const mat = new THREE.MeshLambertMaterial({ color: b.type === "tower" ? 0x2a4a5a : 0x6b7f92 });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(b.x, gh + b.h / 2, b.z);
+      bGroup.add(mesh);
+      if (b.type === "tower") {
+        const apex = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.8, 6), new THREE.MeshBasicMaterial({ color: 0x67e8f9 }));
+        apex.position.set(b.x, gh + b.h + 0.4, b.z);
+        bGroup.add(apex);
+      }
+    }
+    // --- roads ---
+    const roadGroup = new THREE.Group();
+    env.add(roadGroup);
+    for (const road of cache.roads) {
+      const sampled = [];
+      for (let s = 0; s < road.length - 1; s++) {
+        const a = road[s], b = road[s + 1];
+        const dist = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        const steps = Math.max(1, Math.ceil(dist / 0.8));
+        for (let k2 = 0; k2 <= steps; k2++) {
+          const f = k2 / steps;
+          const x = lerp(a[0], b[0], f), z = lerp(a[1], b[1], f);
+          sampled.push(new THREE.Vector3(x, heightAt(x, z) + 0.06, z));
+        }
+      }
+      if (sampled.length > 1) {
+        const g = new THREE.BufferGeometry().setFromPoints(sampled);
+        const line = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xbddcf0, transparent: true, opacity: 0.28 }));
+        roadGroup.add(line);
+      }
+    }
+    // --- grid overlay ---
+    const gridGroup = new THREE.Group();
+    env.add(gridGroup);
+    {
+      const pts = [];
+      const span = 19.5, stepG = 3.25;
+      for (let v = -span; v <= span + 0.001; v += stepG) {
+        for (let z = -span; z < span - 0.001; z += 1.5) pts.push(v, heightAt(v, z) + 0.04, z, v, heightAt(v, z + 1.5) + 0.04, z + 1.5);
+        for (let x = -span; x < span - 0.001; x += 1.5) pts.push(x, heightAt(x, v) + 0.04, v, x + 1.5, heightAt(x + 1.5, v) + 0.04, v);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+      const lines = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x58a0be, transparent: true, opacity: 0.12 }));
+      gridGroup.add(lines);
+      for (const radius of [6, 12, 18]) {
+        const rp = [];
+        for (let i = 0; i <= 72; i++) {
+          const a = (i / 72) * TAU;
+          const px = Math.cos(a) * radius, pz = Math.sin(a) * radius;
+          rp.push(px, heightAt(px, pz) + 0.04, pz);
+        }
+        const rg = new THREE.BufferGeometry();
+        rg.setAttribute("position", new THREE.Float32BufferAttribute(rp, 3));
+        gridGroup.add(new THREE.Line(rg, new THREE.LineBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.14 })));
+      }
+    }
+    // --- coordinator bases ---
+    const baseGroup = new THREE.Group();
+    env.add(baseGroup);
+    const baseCores = [];
+    for (const base of [{ x: 0, z: 0, r: 2.2, main: true }, { x: -6.2, z: -6.2, r: 1.6, main: false }]) {
+      const gh = heightAt(base.x, base.z);
+      const plat = new THREE.Mesh(
+        new THREE.CylinderGeometry(base.r, base.r, 0.14, 6),
+        new THREE.MeshLambertMaterial({ color: 0x546e7e })
+      );
+      plat.position.set(base.x, gh + 0.07, base.z);
+      baseGroup.add(plat);
+      const edge = new THREE.LineLoop(
+        new THREE.BufferGeometry().setFromPoints(
+          Array.from({ length: 6 }, (_, k) => {
+            const a = (k / 6) * TAU + Math.PI / 6;
+            return new THREE.Vector3(base.x + Math.cos(a) * base.r, gh + 0.15, base.z + Math.sin(a) * base.r);
+          })
+        ),
+        new THREE.LineBasicMaterial({ color: base.main ? 0x22d3ee : 0xa78bfa, transparent: true, opacity: 0.7 })
+      );
+      baseGroup.add(edge);
+      const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 2.6, 6), new THREE.MeshLambertMaterial({ color: 0x3a5470 }));
+      tower.position.set(base.x, gh + 1.3, base.z);
+      baseGroup.add(tower);
+      const coreMat = new THREE.MeshBasicMaterial({ color: base.main ? 0x22d3ee : 0xa78bfa });
+      const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.42), coreMat);
+      core.position.set(base.x, gh + 2.7, base.z);
+      baseGroup.add(core);
+      baseCores.push({ core, main: base.main });
+    }
+    // --- feature truth + markers ---
+    const featureGroup = new THREE.Group();
+    env.add(featureGroup);
+    const featureViews = [];
+    T.glowTex = T.glowTex || makeGlowTexture();
+    for (const f of state.features) {
+      const type = FEATURE_TYPES[f.type] || FEATURE_TYPES.hotspot;
+      const hex = parseInt(type.color.slice(1), 16);
+      const gh0 = Math.max(heightAt(f.x, f.z), wl * 0.9);
+      const truth = new THREE.Group();
+      truth.position.set(f.x, gh0 + 0.05, f.z);
+      // truth body by type
+      if (f.type === "fire" || f.type === "hotspot") {
+        const disc = new THREE.Mesh(new THREE.CircleGeometry(Math.max(0.8, f.r * 0.7), 28), new THREE.MeshBasicMaterial({ color: 0xff5a3c, transparent: true, opacity: 0.45, depthWrite: false }));
+        disc.rotation.x = -Math.PI / 2;
+        disc.position.y = 0.06;
+        truth.add(disc);
+        const COUNT = 70;
+        const posArr = new Float32Array(COUNT * 3);
+        const colArr = new Float32Array(COUNT * 3);
+        const parts = [];
+        for (let i = 0; i < COUNT; i++) parts.push({ a: Math.random() * TAU, r0: Math.random(), o: i / COUNT });
+        const pg = new THREE.BufferGeometry();
+        pg.setAttribute("position", new THREE.BufferAttribute(posArr, 3));
+        pg.setAttribute("color", new THREE.BufferAttribute(colArr, 3));
+        const points = new THREE.Points(pg, new THREE.PointsMaterial({ size: 0.35, map: T.glowTex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+        points.frustumCulled = false;
+        truth.add(points);
+        truth.userData.fire = { points, posArr, colArr, parts, COUNT };
+      } else if (f.type === "survivor") {
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(0.32, 1.1, 8), new THREE.MeshLambertMaterial({ color: 0x34d399, emissive: 0x0d5c3f }));
+        cone.position.y = 0.55;
+        truth.add(cone);
+        const ringM = new THREE.Mesh(new THREE.RingGeometry(0.4, 0.5, 28), new THREE.MeshBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }));
+        ringM.rotation.x = -Math.PI / 2;
+        ringM.position.y = 0.08;
+        truth.add(ringM);
+        truth.userData.ring = ringM;
+      } else if (f.type === "vehicle") {
+        const box = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.4, 0.55), new THREE.MeshLambertMaterial({ color: 0x2b6ea8 }));
+        box.position.y = 0.2;
+        truth.add(box);
+        const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: T.glowTex, color: 0x38bdf8, transparent: true, opacity: 0.7, depthWrite: false }));
+        glow.scale.set(2.2, 2.2, 1);
+        glow.position.y = 0.5;
+        truth.add(glow);
+      } else if (f.type === "flood") {
+        const disc = new THREE.Mesh(new THREE.CircleGeometry(Math.max(1.2, f.r), 32), new THREE.MeshBasicMaterial({ color: 0x3a86d8, transparent: true, opacity: 0.5, depthWrite: false }));
+        disc.rotation.x = -Math.PI / 2;
+        disc.position.y = 0.1;
+        truth.add(disc);
+      } else if (f.type === "structure") {
+        const box = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.7, 0.8), new THREE.MeshLambertMaterial({ color: 0x8b7ab8 }));
+        box.position.y = 0.35;
+        truth.add(box);
+      } else if (f.type === "smoke") {
+        const s = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.5, f.r * 0.4), 12, 10), new THREE.MeshBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.35, depthWrite: false }));
+        s.position.y = 0.8;
+        truth.add(s);
+      } else {
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.9, 6), new THREE.MeshLambertMaterial({ color: hex }));
+        cone.position.y = 0.45;
+        truth.add(cone);
+      }
+      featureGroup.add(truth);
+      // marker
+      const marker = new THREE.Group();
+      marker.position.set(f.x, gh0 + 0.07, f.z);
+      const ringMat = new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false });
+      const ring = new THREE.Mesh(new THREE.RingGeometry(Math.max(0.4, f.r * 0.85), Math.max(0.5, f.r * 1.0), 36), ringMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.02;
+      marker.add(ring);
+      const beamMat = new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: 0.35, depthWrite: false });
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 5, 6), beamMat);
+      beam.position.y = 2.5;
+      marker.add(beam);
+      const diaMat = new THREE.MeshBasicMaterial({ color: hex, wireframe: true, transparent: true, opacity: 0.95 });
+      const dia = new THREE.Mesh(new THREE.OctahedronGeometry(0.5), diaMat);
+      dia.position.y = 5.0;
+      marker.add(dia);
+      const label = makeLabelSprite();
+      label.sprite.position.y = 5.9;
+      marker.add(label.sprite);
+      featureGroup.add(marker);
+      featureViews.push({ f, truth, marker, ringMat, ring, beamMat, diaMat, dia, label, hex, type });
+    }
+    // --- drones + coords ---
+    const droneViews = [];
+    const droneGroup = new THREE.Group();
+    env.add(droneGroup);
+    const hitList = [];
+    for (const d of state.drones) {
+      const grp = new THREE.Group();
+      const bodyMat = new THREE.MeshLambertMaterial({ color: 0x9fcfe0, emissive: 0x0a4a5a });
+      const body = new THREE.Mesh(new THREE.OctahedronGeometry(0.34), bodyMat);
+      grp.add(body);
+      const armMat = new THREE.MeshBasicMaterial({ color: 0xa5f3fc, transparent: true, opacity: 0.6 });
+      const armGeo = new THREE.BoxGeometry(0.9, 0.05, 0.08);
+      const arm1 = new THREE.Mesh(armGeo, armMat);
+      const arm2 = new THREE.Mesh(armGeo, armMat);
+      arm2.rotation.y = Math.PI / 2;
+      grp.add(arm1); grp.add(arm2);
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: T.glowTex, color: 0x22d3ee, transparent: true, opacity: 0.8, depthWrite: false }));
+      glow.scale.set(1.4, 1.4, 1);
+      grp.add(glow);
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.65, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false }));
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = -0.2;
+      grp.add(ring);
+      const hit = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 6), new THREE.MeshBasicMaterial({ visible: false }));
+      hit.userData.droneId = d.id;
+      grp.add(hit);
+      droneGroup.add(grp);
+      hitList.push(hit);
+      droneViews.push({ d, grp, bodyMat, glow, ring, hit });
+    }
+    const coordViews = [];
+    for (const [id, posZ, colHex] of [["MAIN", MAIN_POS, 0x22d3ee], ["BKUP", BKUP_POS, 0xa78bfa]]) {
+      const grp = new THREE.Group();
+      const coreMat = new THREE.MeshBasicMaterial({ color: colHex });
+      const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.75), coreMat);
+      grp.add(core);
+      const halo = new THREE.Mesh(new THREE.RingGeometry(1.0, 1.15, 36), new THREE.MeshBasicMaterial({ color: colHex, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false }));
+      halo.rotation.x = -Math.PI / 2;
+      halo.position.y = -0.3;
+      grp.add(halo);
+      const hit = new THREE.Mesh(new THREE.SphereGeometry(1.1, 8, 6), new THREE.MeshBasicMaterial({ visible: false }));
+      hit.userData.droneId = id;
+      grp.add(hit);
+      grp.position.set(posZ.x, posZ.y, posZ.z);
+      env.add(grp);
+      hitList.push(hit);
+      coordViews.push({ id, grp, coreMat, core, halo });
+    }
+    // --- dynamic overlays: links, packets, zones, coverage ---
+    const MAX_LINKS = 120;
+    const linkPos = new Float32Array(MAX_LINKS * 2 * 3);
+    const linkCol = new Float32Array(MAX_LINKS * 2 * 3);
+    const linkGeo = new THREE.BufferGeometry();
+    linkGeo.setAttribute("position", new THREE.BufferAttribute(linkPos, 3));
+    linkGeo.setAttribute("color", new THREE.BufferAttribute(linkCol, 3));
+    const linkLines = new THREE.LineSegments(linkGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false }));
+    linkLines.frustumCulled = false;
+    env.add(linkLines);
+    const MAX_PKT = 90;
+    const pktPos = new Float32Array(MAX_PKT * 3);
+    const pktCol = new Float32Array(MAX_PKT * 3);
+    const pktGeo = new THREE.BufferGeometry();
+    pktGeo.setAttribute("position", new THREE.BufferAttribute(pktPos, 3));
+    pktGeo.setAttribute("color", new THREE.BufferAttribute(pktCol, 3));
+    const pktPts = new THREE.Points(pktGeo, new THREE.PointsMaterial({ size: 0.4, map: T.glowTex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    pktPts.frustumCulled = false;
+    env.add(pktPts);
+    // storm + interference
+    const stormMesh = new THREE.Mesh(new THREE.BoxGeometry(19.5 - STORM_X, 11.5, 34), new THREE.MeshBasicMaterial({ color: 0xfb7185, transparent: true, opacity: 0.08, depthWrite: false }));
+    stormMesh.position.set((STORM_X + 19.5) / 2, 5.75, 0);
+    stormMesh.visible = false;
+    env.add(stormMesh);
+    const stormEdge = new THREE.LineSegments(new THREE.EdgesGeometry(stormMesh.geometry), new THREE.LineBasicMaterial({ color: 0xfb7185, transparent: true, opacity: 0.3 }));
+    stormEdge.position.copy(stormMesh.position);
+    stormEdge.visible = false;
+    env.add(stormEdge);
+    const interMesh = new THREE.Mesh(new THREE.CylinderGeometry(ZONE_R, ZONE_R, 2.6, 32, 1, true), new THREE.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false }));
+    interMesh.position.set(ZONE_POS.x, heightAt(ZONE_POS.x, ZONE_POS.z) + 1.3, ZONE_POS.z);
+    interMesh.visible = false;
+    env.add(interMesh);
+    const coverageGroup = new THREE.Group();
+    for (const d of state.drones) {
+      const c = new THREE.Mesh(new THREE.CircleGeometry(3.4, 28), new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.06, depthWrite: false }));
+      c.rotation.x = -Math.PI / 2;
+      coverageGroup.add(c);
+    }
+    coverageGroup.visible = false;
+    env.add(coverageGroup);
+    T.mapGroup = env;
+    T.waterMat = waterMat;
+    T.baseCores = baseCores;
+    T.featureViews = featureViews;
+    T.droneViews = droneViews;
+    T.coordViews = coordViews;
+    T.hitList = hitList;
+    T.linkLines = linkLines; T.linkPos = linkPos; T.linkCol = linkCol;
+    T.pktPts = pktPts; T.pktPos = pktPos; T.pktCol = pktCol;
+    T.stormMesh = stormMesh; T.stormEdge = stormEdge; T.interMesh = interMesh;
+    T.gridGroup = gridGroup; T.coverageGroup = coverageGroup; T.treeGroup = treeGroup;
+    T.roadGroup = roadGroup;
+    T.raycaster = T.raycaster || new THREE.Raycaster();
+  }
+
+  function syncThreeDynamic(t) {
+    const T = state.three;
+    if (!T || !T.ready) return;
+    const cam = state.camera;
+    // camera from spherical goal
+    const yaw = cam.yaw, pitch = cam.pitch, dist = cam.dist;
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    T.camera.position.set(
+      cam.target[0] + dist * Math.sin(yaw) * cp,
+      cam.target[1] + dist * sp,
+      cam.target[2] + dist * Math.cos(yaw) * cp
+    );
+    T.camera.lookAt(cam.target[0], cam.target[1], cam.target[2]);
+    // ambience by situation
+    const sit = currentSituation();
+    if (sit.night) {
+      T.scene.background.setHex(0x02050d);
+      T.ambient.intensity = 0.45; T.sun.intensity = 0.5;
+    } else if (sit.id === "blackout") {
+      T.scene.background.setHex(0x080420);
+      T.ambient.intensity = 0.6; T.sun.intensity = 0.65;
+    } else {
+      T.scene.background.setHex(0x050b13);
+      T.ambient.intensity = 0.75; T.sun.intensity = 0.9;
+    }
+    // water pulse
+    if (T.waterMat) T.waterMat.opacity = 0.5 + 0.1 * Math.sin(t * 1.4);
+    // base cores spin/pulse
+    for (const b of (T.baseCores || [])) {
+      b.core.rotation.y += 0.02;
+      b.core.rotation.x += 0.008;
+    }
+    // features
+    const now = performance.now() / 1000;
+    for (const view of (T.featureViews || [])) {
+      const f = view.f;
+      const gh = Math.max(heightAt(f.x, f.z), (state.terrain ? state.terrain.waterLevel : 0) * 0.9);
+      view.truth.position.set(f.x, gh + 0.05, f.z);
+      view.marker.position.set(f.x, gh + 0.07, f.z);
+      if (view.truth.userData.fire) {
+        const fire = view.truth.userData.fire;
+        const baseR = Math.max(0.8, f.r * 0.7);
+        for (let i = 0; i < fire.COUNT; i++) {
+          const p = fire.parts[i];
+          const k = (t * 0.55 + p.o) % 1;
+          const rr = baseR * 0.9 * p.r0 * (1 - k * 0.5);
+          fire.posArr[i * 3] = Math.cos(p.a + t * 0.3) * rr;
+          fire.posArr[i * 3 + 1] = 0.12 + k * baseR * 1.15;
+          fire.posArr[i * 3 + 2] = Math.sin(p.a + t * 0.3) * rr;
+          const heat = 1 - k;
+          fire.colArr[i * 3] = heat;
+          fire.colArr[i * 3 + 1] = heat * 0.35;
+          fire.colArr[i * 3 + 2] = 0.1;
+        }
+        fire.points.geometry.attributes.position.needsUpdate = true;
+        fire.points.geometry.attributes.color.needsUpdate = true;
+      }
+      if (view.truth.userData.ring) {
+        const k = (t * 0.7) % 1;
+        view.truth.userData.ring.scale.setScalar(1 + k * 3);
+        view.truth.userData.ring.material.opacity = 0.6 * (1 - k);
+      }
+      const live = f.liveState === "live";
+      const stale = f.liveState === "stale";
+      const highlighted = state.highlightFeature === f.id && now < state.highlightUntil;
+      const pulse = 0.5 + 0.5 * Math.sin(t * 1.6 + f.phase);
+      const scale = 1 + (live ? pulse * 0.08 : 0) + (highlighted ? 0.15 : 0);
+      view.ring.scale.setScalar(scale);
+      view.ringMat.opacity = live ? 0.95 : stale ? 0.6 : 0.35;
+      view.beamMat.opacity = live ? 0.35 : stale ? 0.15 : 0.07;
+      view.dia.rotation.y = t * 1.5 + f.phase;
+      view.dia.scale.setScalar(1 + (live ? pulse * 0.15 : 0));
+      if (!live) view.diaMat.opacity = 0.5; else view.diaMat.opacity = 0.95;
+      view.marker.visible = state.layers.features;
+      // label
+      const stateLabel = live ? "LIVE" : stale ? "STALE" : "LOST";
+      const labelText = f.label.toUpperCase() + " · " + stateLabel + " · " + f.confidence + "%";
+      const labelColor = live ? view.type.color : stale ? "#fbbf24" : "#fb7185";
+      setLabelSprite(view.label, labelText, labelColor);
+      view.label.sprite.visible = state.layers.labels && state.layers.features;
+    }
+    // drones
+    for (const view of (T.droneViews || [])) {
+      const d = view.d;
+      view.grp.position.set(d.pos.x, d.pos.y, d.pos.z);
+      view.grp.rotation.y = -state.time * 0.35 - d.idx * 0.7;
+      if (d.failed) {
+        view.bodyMat.color.setHex(0xfb7185);
+        view.bodyMat.emissive.setHex(0x3a0a12);
+        view.glow.material.color.setHex(0xfb7185);
+        view.glow.material.opacity = 0.4;
+      } else if (d.leader) {
+        view.bodyMat.color.setHex(0xfbbf24);
+        view.bodyMat.emissive.setHex(0x5a3a00);
+        view.glow.material.color.setHex(0xfbbf24);
+        view.glow.material.opacity = 0.9;
+      } else if (d.connected) {
+        view.bodyMat.color.setHex(0x9fcfe0);
+        view.bodyMat.emissive.setHex(0x0a4a5a);
+        view.glow.material.color.setHex(0x22d3ee);
+        view.glow.material.opacity = 0.8;
+      } else {
+        view.bodyMat.color.setHex(0xd9a441);
+        view.bodyMat.emissive.setHex(0x4a3000);
+        view.glow.material.color.setHex(0xfbbf24);
+        view.glow.material.opacity = 0.6;
+      }
+      const selected = state.selected === d.id;
+      const pulse = 0.5 + 0.5 * Math.sin(t * 2.2 + d.idx);
+      view.ring.material.opacity = selected ? 0.9 : 0;
+      view.ring.scale.setScalar(1 + (selected ? pulse * 0.2 : 0));
+      view.glow.visible = !d.failed;
+    }
+    // coordinators
+    for (const view of (T.coordViews || [])) {
+      const isMain = view.id === "MAIN";
+      const active = isMain ? state.main.active : state.backup.active;
+      view.core.rotation.y = t * 0.8;
+      view.core.rotation.x = t * 0.3;
+      view.grp.visible = true;
+      view.coreMat.color.setHex(!active ? 0xfb7185 : isMain ? 0x22d3ee : 0xa78bfa);
+      view.halo.material.opacity = active ? 0.5 : 0.2;
+      view.grp.scale.setScalar(active ? 1 : 0.7);
+    }
+    // links
+    if (T.linkLines) {
+      let idx = 0;
+      const cTree = [0.4, 0.91, 0.98], cLocal = [0.98, 0.75, 0.14], cBase = [0.27, 0.59, 0.72];
+      for (const e of state.edges) {
+        if (idx >= 120) break;
+        const na = nodeById(e.a), nb = nodeById(e.b);
+        if (!na || !nb) continue;
+        const pa = na.pos, pb = nb.pos;
+        T.linkPos[idx * 6] = pa.x; T.linkPos[idx * 6 + 1] = pa.y; T.linkPos[idx * 6 + 2] = pa.z;
+        T.linkPos[idx * 6 + 3] = pb.x; T.linkPos[idx * 6 + 4] = pb.y; T.linkPos[idx * 6 + 5] = pb.z;
+        const col = e.tree ? cTree : e.local ? cLocal : cBase;
+        T.linkCol[idx * 6] = col[0]; T.linkCol[idx * 6 + 1] = col[1]; T.linkCol[idx * 6 + 2] = col[2];
+        T.linkCol[idx * 6 + 3] = col[0]; T.linkCol[idx * 6 + 4] = col[1]; T.linkCol[idx * 6 + 5] = col[2];
+        idx++;
+      }
+      T.linkLines.geometry.setDrawRange(0, idx * 2);
+      T.linkLines.geometry.attributes.position.needsUpdate = true;
+      T.linkLines.geometry.attributes.color.needsUpdate = true;
+      T.linkLines.visible = state.layers.links;
+    }
+    // packets
+    if (T.pktPts) {
+      let n = 0;
+      const cAmber = [0.98, 0.75, 0.14], cCyan = [0.4, 0.91, 0.98];
+      for (const p of state.packets) {
+        if (n >= 90) break;
+        const na = nodeById(p.a), nb = nodeById(p.b);
+        if (!na || !nb) continue;
+        let k = clamp((state.time - p.born) / p.dur, 0, 1);
+        k = k * k * (3 - 2 * k);
+        if (p.dir) k = 1 - k;
+        T.pktPos[n * 3] = lerp(na.pos.x, nb.pos.x, k);
+        T.pktPos[n * 3 + 1] = lerp(na.pos.y, nb.pos.y, k);
+        T.pktPos[n * 3 + 2] = lerp(na.pos.z, nb.pos.z, k);
+        const local = state.drones.find((d) => d.id === p.a || d.id === p.b);
+        const col = local && local.group ? cAmber : cCyan;
+        T.pktCol[n * 3] = col[0]; T.pktCol[n * 3 + 1] = col[1]; T.pktCol[n * 3 + 2] = col[2];
+        n++;
+      }
+      T.pktPts.geometry.setDrawRange(0, n);
+      T.pktPts.geometry.attributes.position.needsUpdate = true;
+      T.pktPts.geometry.attributes.color.needsUpdate = true;
+      T.pktPts.visible = state.layers.packets;
+    }
+    // zones / grid / coverage
+    if (T.stormMesh) {
+      T.stormMesh.visible = state.storm;
+      T.stormEdge.visible = state.storm;
+      T.interMesh.visible = state.interference;
+      T.interMesh.position.y = heightAt(ZONE_POS.x, ZONE_POS.z) + 1.3;
+      T.gridGroup.visible = state.layers.grid;
+      T.coverageGroup.visible = state.layers.coverage;
+      if (T.coverageGroup.visible) {
+        T.coverageGroup.children.forEach((cMesh, i) => {
+          const d = state.drones[i];
+          if (!d || d.failed) { cMesh.visible = false; return; }
+          cMesh.visible = true;
+          cMesh.position.set(d.pos.x, heightAt(d.pos.x, d.pos.z) + 0.05, d.pos.z);
+          cMesh.material.color.setHex(d.group ? 0xfbbf24 : 0x22d3ee);
+        });
+      }
+    }
+  }
+
+  function renderCommand3D(t) {
+    syncThreeDynamic(t);
+    if (state.three && state.three.ready) state.three.renderer.render(state.three.scene, state.three.camera);
+    // HUD-only 2D overlay (corners + map name) on transparent canvas
+    const ctx = state.ctx;
+    if (ctx) {
+      ctx.save();
+      drawStageHud(t);
+      ctx.restore();
+    }
+  }
+
+  function pickAtThree(clientX, clientY) {
+    const T = state.three;
+    if (!T || !T.ready || !state.canvas3d) return null;
+    const rect = state.canvas3d.getBoundingClientRect();
+    const nx = ((clientX - rect.left) / rect.width) * 2 - 1;
+    const ny = -((clientY - rect.top) / rect.height) * 2 + 1;
+    T.raycaster.setFromCamera({ x: nx, y: ny }, T.camera);
+    const hits = T.raycaster.intersectObjects(T.hitList || [], false);
+    if (hits.length) return hits[0].object.userData.droneId || null;
+    return null;
   }
 
   function drawFeatureGlyph(x, y, size, type, liveState, t, phase) {
@@ -4084,6 +4862,10 @@
   }
 
   function pickAt(clientX, clientY) {
+    if (state.view === "command" && threeAvailable()) {
+      const hit = pickAtThree(clientX, clientY);
+      if (hit) return hit;
+    }
     const canvas = state.canvas;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
@@ -4101,7 +4883,9 @@
     if (state.dragging) return;
     const id = pickAt(e.clientX, e.clientY);
     if (state.hover !== id) state.hover = id;
-    if (state.canvas) state.canvas.style.cursor = id ? "pointer" : "";
+    const active = state.view === "command" && threeAvailable() ? state.canvas3d : state.canvas;
+    if (active) active.style.cursor = id ? "pointer" : "";
+    else if (state.canvas) state.canvas.style.cursor = id ? "pointer" : "";
   }
 
   function hideCanvasHint() {
@@ -4109,7 +4893,12 @@
   }
 
   function bindCanvasInput() {
-    const canvas = state.canvas;
+    for (const c of [state.canvas, state.canvas3d]) {
+      if (c) attachCanvasInput(c);
+    }
+  }
+
+  function attachCanvasInput(canvas) {
     if (!canvas) return;
     const pointers = new Map();
     let dragButton = 0;
@@ -4444,6 +5233,7 @@
     ctx.setTransform(state.DPR, 0, 0, state.DPR, 0, 0);
     ctx.clearRect(0, 0, state.W, state.H);
     if (state.view === "topology") renderTopology(t);
+    else if (threeAvailable()) renderCommand3D(t);
     else renderCommand(t);
   }
 
