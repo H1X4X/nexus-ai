@@ -4041,6 +4041,8 @@
     const cam = state.camera;
     const goal = state.camGoal;
     if (goal.auto && !state.dragging) goal.yaw += dt * 0.45;
+    // Self-heal sessions parked at the old flat horizon: never stay below 0.22.
+    goal.pitch = clamp(goal.pitch, 0.22, 1.52);
     const k = Math.min(1, dt * 8);
     cam.yaw = angleLerp(cam.yaw, goal.yaw, k);
     cam.pitch = lerp(cam.pitch, goal.pitch, k);
@@ -4058,10 +4060,13 @@
     // ~0.011 rad/px: a single drag across the canvas (~570 px) covers a
     // full 360° orbit without re-grabbing.
     state.camGoal.yaw += dx * 0.011;
-    // Drag up (negative dy) lifts the camera toward top-down; drag down
-    // brings it to horizon level. Previously the sign was inverted, which
-    // made "drag up to see from up" go the wrong way.
-    state.camGoal.pitch = clamp(state.camGoal.pitch - dy * 0.0065, 0.06, 1.52);
+    // Drag up (negative dy) lifts the camera toward top-down.
+    // Two guards keep sideways 360° drags usable: mostly-vertical drags
+    // change pitch, mostly-horizontal drags hold it — and the low end is
+    // clamped at 0.22 rad so the camera never drops to the flat horizon
+    // where the battlefield disappears edge-on.
+    const vertical = Math.abs(dx) > Math.abs(dy) * 3 ? 0 : dy;
+    state.camGoal.pitch = clamp(state.camGoal.pitch - vertical * 0.004, 0.22, 1.52);
     state.camera.yaw = state.camGoal.yaw;
     state.camera.pitch = state.camGoal.pitch;
   }
