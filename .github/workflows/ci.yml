@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Required files exist
+        shell: bash
+        run: |
+          set -e
+          for f in index.html favicon.svg LICENSE robots.txt sitemap.xml README.md assets/app.js assets/styles.css assets/vendor/three.min.js assets/fonts/fonts.css; do
+            test -s "$f" || { echo "missing: $f"; exit 1; }
+          done
+          echo "files ok"
+
+      - name: JavaScript syntax
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node --check assets/app.js
+
+      - name: No external runtime requests
+        shell: bash
+        run: |
+          set -e
+          # Site must stay self-hosted: relative asset paths only at runtime.
+          # (canonical/og URLs in index.html are metadata strings, not fetches.)
+          if grep -RInE '<script[^>]*src="https?://|<link[^>]*rel="stylesheet"[^>]*href="https?://' index.html assets/app.js assets/styles.css; then
+            echo "external runtime URL found" >&2
+            exit 1
+          fi
+          echo "no external runtime URLs"
+
+      - name: Static site smoke (no server needed)
+        shell: bash
+        run: |
+          set -e
+          python3 - <<'PY'
+          from pathlib import Path
+          html = Path("index.html").read_text(encoding="utf-8")
+          assert "<title>" in html and "NEXUS AI" in html
+          for token in ["ops-canvas-3d", "map-options", "situation-options", "feature-chips", "assets/vendor/three.min.js", "assets/app.js"]:
+            assert token in html, f"missing {token}"
+          js = Path("assets/app.js").read_text(encoding="utf-8")
+          for token in ["SITUATIONS", "MAPS", "wind", "rain", "compass", "threeAvailable"]:
+            assert token in js, f"missing {token}"
+          print("smoke ok")
+          PY

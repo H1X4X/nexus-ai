@@ -381,6 +381,29 @@
       liveFor: 5,
       staleFor: 12,
       sync: 0.32
+    },
+    wind: {
+      id: "wind",
+      label: "Wind",
+      hint: "Crosswind pushes fire and smoke downwind. Hazards drift east.",
+      sensor: 0.9,
+      liveFor: 7,
+      staleFor: 15,
+      sync: 0.9,
+      spread: 0.03,
+      wind: { x: 0.55, z: 0.25 }
+    },
+    rain: {
+      id: "rain",
+      label: "Rain",
+      hint: "Rain cuts visibility and swells flood water.",
+      sensor: 0.8,
+      liveFor: 7,
+      staleFor: 16,
+      sync: 0.75,
+      spread: 0.04,
+      rain: true,
+      fog: true
     }
   };
 
@@ -866,7 +889,13 @@
     }
 
     for (const f of state.features) {
-      if (sit.drift && (f.type === "survivor" || f.type === "vehicle")) {
+      if (sit.wind && (f.type === "smoke" || f.type === "fire" || f.type === "hotspot")) {
+        // Crosswind advects airborne hazards downwind (capped so the
+        // feature stays inside the map and home stays recoverable).
+        const k = Math.min(3, state.time * 0.05);
+        f.x = f.homeX + sit.wind.x * k;
+        f.z = f.homeZ + sit.wind.z * k;
+      } else if (sit.drift && (f.type === "survivor" || f.type === "vehicle")) {
         const wave = state.time * 0.11 + f.phase;
         f.x = f.homeX + Math.cos(wave) * 1.25;
         f.z = f.homeZ + Math.sin(wave * 0.8) * 1.25;
@@ -1151,6 +1180,10 @@
     eventLog: $("#event-log"),
     stageToast: $("#stage-toast"),
     canvasHint: $("#canvas-hint"),
+    camCompass: $("#cam-compass"),
+    compassYaw: $("#compass-yaw"),
+    compassPitch: $("#compass-pitch"),
+    compassNeedle: $("#compass-needle"),
     camPresets: $("#camera-presets"),
     stage: $("#ops")
   };
@@ -2542,6 +2575,22 @@
       state.canvas.style.pointerEvents = use3d ? "none" : "auto";
       state.canvas.style.cursor = use3d ? "" : "";
     }
+    if (el.camCompass) el.camCompass.style.display = state.view === "command" ? "inline-flex" : "none";
+  }
+
+  function updateCompass() {
+    if (!el.camCompass || state.view !== "command") return;
+    const cam = state.camera;
+    const yawDeg = Math.round((((cam.yaw * 180) / Math.PI) % 360 + 360) % 360);
+    const cardinals = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+    const cardinal = cardinals[Math.round(yawDeg / 45) % 8];
+    const pitchDeg = Math.round((cam.pitch * 180) / Math.PI);
+    // Cache the formatted string to avoid DOM churn every frame.
+    const label = yawDeg + "° " + cardinal;
+    const pitchLabel = "PITCH " + pitchDeg + "° · DIST " + Math.round(cam.dist);
+    if (el.compassYaw && el.compassYaw.textContent !== label) el.compassYaw.textContent = label;
+    if (el.compassPitch && el.compassPitch.textContent !== pitchLabel) el.compassPitch.textContent = pitchLabel;
+    if (el.compassNeedle) el.compassNeedle.style.transform = "rotate(" + yawDeg + "deg)";
   }
 
   function projectPoint(p) {
@@ -3532,6 +3581,7 @@
     env.add(coverageGroup);
     T.mapGroup = env;
     T.waterMat = waterMat;
+    T.waterMesh = waterMesh;
     T.baseCores = baseCores;
     T.featureViews = featureViews;
     T.droneViews = droneViews;
@@ -3560,18 +3610,32 @@
     T.camera.lookAt(cam.target[0], cam.target[1], cam.target[2]);
     // ambience by situation
     const sit = currentSituation();
-    if (sit.night) {
-      T.scene.background.setHex(0x02050d);
-      T.ambient.intensity = 0.45; T.sun.intensity = 0.5;
-    } else if (sit.id === "blackout") {
-      T.scene.background.setHex(0x080420);
-      T.ambient.intensity = 0.6; T.sun.intensity = 0.65;
+    if (sit.id === "rain") {
+      // Rain: fogged, flattened light, higher water.
+      T.scene.background.setHex(0x0a1a26);
+      T.scene.fog = T.scene.fog || new THREE.Fog(0x0a1a26, 30, 95);
+      T.scene.fog.color.setHex(0x0a1a26);
+      T.scene.fog.near = 30; T.scene.fog.far = 95;
+      T.ambient.intensity = 0.65; T.sun.intensity = 0.6;
     } else {
-      T.scene.background.setHex(0x050b13);
-      T.ambient.intensity = 0.75; T.sun.intensity = 0.9;
+      T.scene.fog = null;
+      if (sit.night) {
+        T.scene.background.setHex(0x02050d);
+        T.ambient.intensity = 0.45; T.sun.intensity = 0.5;
+      } else if (sit.id === "blackout") {
+        T.scene.background.setHex(0x080420);
+        T.ambient.intensity = 0.6; T.sun.intensity = 0.65;
+      } else {
+        T.scene.background.setHex(0x050b13);
+        T.ambient.intensity = 0.75; T.sun.intensity = 0.9;
+      }
     }
-    // water pulse
+    // water pulse + rain swell (water plane sits above the level)
     if (T.waterMat) T.waterMat.opacity = 0.5 + 0.1 * Math.sin(t * 1.4);
+    if (T.waterMesh) {
+      const baseWl = state.terrain ? state.terrain.waterLevel : 0.3;
+      T.waterMesh.position.y = baseWl + 0.03 + (sit.id === "rain" ? 0.25 : 0);
+    }
     // base cores spin/pulse
     for (const b of (T.baseCores || [])) {
       b.core.rotation.y += 0.02;
@@ -5430,6 +5494,7 @@
     if (state.view === "topology") renderTopology(t);
     else if (threeAvailable()) renderCommand3D(t);
     else renderCommand(t);
+    updateCompass();
   }
 
   let lastFrame = performance.now();

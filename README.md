@@ -26,11 +26,11 @@ Open `index.html` directly in a browser, or serve this folder with any static fi
 - **1–4** — switch camera presets (`1` Overview, `2` Top-down, `3` East front, `4` Orbit)
 - **Arrow keys** — orbit (←→ yaw, ↑ top-down / ↓ horizon), **+ / −** zoom, **0** back to Overview (active while the simulator is on screen)
 - **Esc** — clear the current selection
-- **Drag up** — lift the camera to top-down; drag sideways for a full **360° orbit** at a stable height, scroll to zoom, right-drag (or Shift-drag) to pan. The camera never drops to the flat horizon where the terrain vanishes. Camera preset buttons stay visible on small screens, so **Top-down** is one tap and **Orbit** (`4`) auto-rotates a full turn in about 14 seconds (grab the canvas to take over).
+- **Drag up** — lift the camera to top-down; drag sideways for a full **360° orbit** at a stable height, scroll to zoom, right-drag (or Shift-drag) to pan. The camera never drops to the flat horizon where the terrain vanishes. Camera preset buttons stay visible on small screens, so **Top-down** is one tap and **Orbit** (`4`) auto-rotates a full turn in about 14 seconds (grab the canvas to take over). A compass HUD (top-left) shows live heading, pitch and distance.
 
 Use the fault buttons to sever links, create interference or a storm partition, fail a drone, or take down the Main or Backup AI. Use **Restore everything** to watch the mesh and buffered records reconcile.
 
-The shared environmental map is the other half of the simulation. Pick a **map** (wildfire, flood, search & rescue, industrial, urban, mountain, coast, or battlefield) and a **situation** (routine watch, rapid spread, night search, or comms blackout) from the bar above the canvas. Each map is a true 3D battlefield — hillfield terrain with vertex colors and hillshade, a water plane, instanced forest cones, rocks, buildings, roads and coordinator bases — rendered with Three.js WebGL, with drones, links, packets and features (ground truth + shared-map rings, beams, diamonds and labels) synced from the same simulation state. The 2D canvas remains as a topology view and as an automatic fallback if WebGL is unavailable. Each feature is live only while a connected drone has it in sensor range; otherwise its record ages through **stale** and **lost**. **Run drill** plays an automated sequence — a storm partition at 0.9 s, a lost drone at 2.8 s, and a full restore at 7 s — so the freshness behavior can be watched without manual fault injection.
+The shared environmental map is the other half of the simulation. Pick a **map** (wildfire, flood, search & rescue, industrial, urban, mountain, coast, or battlefield) and a **situation** (routine watch, rapid spread, night search, comms blackout, wind, or rain) from the bar above the canvas. Each map is a true 3D battlefield — hillfield terrain with vertex colors and hillshade, a water plane, instanced forest cones, rocks, buildings, roads and coordinator bases — rendered with Three.js WebGL, with drones, links, packets and features (ground truth + shared-map rings, beams, diamonds and labels) synced from the same simulation state. The 2D canvas remains as a topology view and as an automatic fallback if WebGL is unavailable. Each feature is live only while a connected drone has it in sensor range; otherwise its record ages through **stale** and **lost**. **Run drill** plays an automated sequence — a storm partition at 0.9 s, a lost drone at 2.8 s, and a full restore at 7 s — so the freshness behavior can be watched without manual fault injection.
 
 ## Reproducible runs
 
@@ -43,7 +43,7 @@ Every simulated random choice comes from one seeded generator. The current run i
 - `seed` — integer seed; the same seed reproduces the same drone layout, battery levels, packet choices, and fault picks.
 - `scenario` — `mesh`, `main`, `drone`, or omit for a free run.
 - `map` — monitored area: `wildfire`, `flood`, `sar`, `industrial`, `urban`, `mountain`, `coast`, or `battlefield`.
-- `situation` — `routine`, `spread`, `night`, or `blackout`.
+- `situation` — `routine`, `spread`, `night`, `blackout`, `wind`, or `rain`.
 
 Use the run bar above the simulator to:
 
@@ -63,6 +63,8 @@ favicon.svg
 LICENSE
 robots.txt
 sitemap.xml
+.github/
+  workflows/ci.yml
 assets/
   styles.css
   app.js
