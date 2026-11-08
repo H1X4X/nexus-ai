@@ -13,8 +13,44 @@
   const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
   const lerp = (a, b, t) => a + (b - a) * t;
   const dist3 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
-  const rand = (min, max) => min + Math.random() * (max - min);
-  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  /* ---------------- seeded randomness ----------------
+     A single PRNG drives every simulated random choice so the same
+     seed + scenario always produces the same run on any device. */
+
+  const SEED_LIMIT = 4294967296;
+  let rngState = 0x9e3779b9;
+
+  const normalizeSeed = (value) => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return null;
+    return ((Math.floor(Math.abs(n)) % SEED_LIMIT) >>> 0);
+  };
+
+  function setSeed(seed) {
+    const normalized = normalizeSeed(seed);
+    rngState = normalized === null ? 0x9e3779b9 : normalized;
+  }
+
+  function nextRandom() {
+    rngState = (rngState + 0x6d2b79f5) >>> 0;
+    let t = rngState;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / SEED_LIMIT;
+  }
+
+  function makeSeed() {
+    if (window.crypto && window.crypto.getRandomValues) {
+      const buf = new Uint32Array(1);
+      window.crypto.getRandomValues(buf);
+      return buf[0] % 1000000000;
+    }
+    return Math.floor(Math.random() * 1000000000);
+  }
+
+  const rand = (min, max) => min + nextRandom() * (max - min);
+  const pick = (arr) => arr[Math.floor(nextRandom() * arr.length)];
   const pairKey = (a, b) => (a < b ? a + "|" + b : b + "|" + a);
   const fmtClock = (t) => {
     const s = Math.max(0, Math.floor(t));
@@ -63,12 +99,34 @@
     orbit: { yaw: -0.65, pitch: 0.42, dist: 37, target: [0, 4.4, 0], auto: true }
   };
 
+  const SCENARIOS = {
+    mesh: {
+      id: "mesh",
+      label: "Cut the mesh",
+      toast: "Scenario: eastern mesh cut. A local group should form."
+    },
+    main: {
+      id: "main",
+      label: "Fail the Main AI",
+      toast: "Scenario: Main AI down. Failover starts after a 2.5s health check."
+    },
+    drone: {
+      id: "drone",
+      label: "Lose a drone",
+      toast: "Scenario: D07 lost. Its last observation is retained as stale."
+    }
+  };
+
   /* ---------------- state ---------------- */
 
   const state = {
     time: 0,
     paused: false,
     speed: 1,
+    seed: 0,
+    scenario: null,
+    log: [],
+    stats: { packets: 0, failovers: 0, reconciliations: 0 },
     uiClock: 0,
     view: "command",
     layers: {
@@ -420,6 +478,13 @@
     mFailed: $("#m-failed"),
     mShared: $("#m-shared"),
     mFresh: $("#m-fresh"),
+    runSeed: $("#run-seed"),
+    runScenario: $("#run-scenario"),
+    runClear: $("#run-clear"),
+    runClock: $("#run-clock"),
+    runCopy: $("#run-copy"),
+    runExport: $("#run-export"),
+    runCsv: $("#run-csv"),
     inspector: $("#inspector"),
     inspectorMode: $("#inspector-mode"),
     eventLog: $("#event-log"),
@@ -660,6 +725,13 @@
   /* ---------------- event log & toast ---------------- */
 
   function logEvent(message, tone) {
+    state.log.push({
+      at: Math.round(state.time * 10) / 10,
+      clock: fmtClock(state.time),
+      tone: tone || "",
+      text: message
+    });
+    if (state.log.length > 500) state.log.shift();
     if (!el.eventLog) return;
     const li = document.createElement("li");
     if (tone) li.className = tone;
@@ -687,6 +759,7 @@
   }
 
   function initLogs() {
+    state.log.length = 0;
     if (!el.eventLog) return;
     el.eventLog.innerHTML = "";
     logEvent("Simulation online — 12 drones authenticated", "ok");
@@ -702,14 +775,16 @@
     state.failedDrones = state.drones.filter((d) => d.failed).map((d) => d.id);
   }
 
-  function failMain() {
+  function failMain(quiet) {
     if (!state.main.active) return;
     state.main.active = false;
     state.acting = null;
     state.handoverTimer = CFG.handover;
     state.handoverTotal = CFG.handover;
     logEvent("Main AI unresponsive — health check started (2.5s)", "bad");
-    toast("Main AI lost. The Backup AI is running a health check before taking authority.", "warn");
+    if (!quiet) {
+      toast("Main AI lost. The Backup AI is running a health check before taking authority.", "warn");
+    }
     computeNetwork();
     updateUI(true);
   }
@@ -761,10 +836,10 @@
     else restoreBackup();
   }
 
-  function failDrone(preferredId) {
+  function failDrone(preferredId, quiet) {
     const candidates = state.drones.filter((d) => !d.failed);
     if (!candidates.length) {
-      toast("Every drone is already offline. Restore the fleet first.", "warn");
+      if (!quiet) toast("Every drone is already offline. Restore the fleet first.", "warn");
       return;
     }
     let d = null;
@@ -792,7 +867,9 @@
     markFailedDroneList();
     state.selected = d.id;
     logEvent("Drone " + d.id + " lost — last known position retained as stale", "bad");
-    toast(d.id + " lost. Its last observation is clearly marked stale.", "warn");
+    if (!quiet) {
+      toast(d.id + " lost. Its last observation is clearly marked stale.", "warn");
+    }
     computeNetwork();
     updateUI(true);
   }
@@ -895,28 +972,39 @@
     updateUI(true);
   }
 
-  function runScenario(name) {
+  function applyScenarioFaults(name) {
     if (name === "mesh") {
-      clearFaults();
       state.storm = true;
       logEvent("Scenario · storm partition raised over the eastern corridor", "warn");
-      toast("Scenario: eastern mesh cut. A local group should form.", "warn");
     } else if (name === "main") {
-      clearFaults();
       computeNetwork();
-      failMain();
-      toast("Scenario: Main AI down. Failover starts after a 2.5s health check.", "warn");
+      failMain(true);
     } else if (name === "drone") {
-      clearFaults();
       computeNetwork();
-      failDrone("D07");
+      failDrone("D07", true);
       setView("command", true);
     }
-    computeNetwork();
-    updateUI(true);
   }
 
-  function resetSim() {
+  function runScenario(name, silent) {
+    if (!name || !SCENARIOS[name]) return;
+    state.scenario = name;
+    resetSim({ scenario: name, silent: true });
+    if (!silent) toast(SCENARIOS[name].toast, "warn");
+    updateRunMeta();
+    syncURL();
+  }
+
+  function resetSim(options) {
+    const opts = options || {};
+    if (opts.seed !== undefined) {
+      const next = normalizeSeed(opts.seed);
+      if (next !== null) state.seed = next;
+    }
+    if (opts.scenario !== undefined) {
+      state.scenario = opts.scenario && SCENARIOS[opts.scenario] ? opts.scenario : null;
+    }
+    setSeed(state.seed);
     state.time = 0;
     state.paused = false;
     state.speed = 1;
@@ -931,7 +1019,9 @@
     state.selected = null;
     state.view = "command";
     state.recall = false;
+    state.stats = { packets: 0, failovers: 0, reconciliations: 0 };
     clearFaults();
+    makeStars();
     for (const d of state.drones) {
       d.hops = null;
       d.connected = true;
@@ -939,6 +1029,7 @@
       d.leader = false;
       d.obsAge = 1;
       d.battery = Math.round(rand(72, 97));
+      d.phase = rand(0, TAU);
     }
     setCamera("overview");
     setView("command", true);
@@ -946,9 +1037,19 @@
     updateSpeedButtons();
     computeNetwork();
     initLogs();
-    logEvent("Simulation reset — 12 drones re-registered", "ok");
-    toast("Simulation reset to T+00:00.", "ok");
+    if (state.scenario) applyScenarioFaults(state.scenario);
+    logEvent("Simulation reset — 12 drones re-registered · seed " + state.seed, "ok");
     updateUI(true);
+    updateRunMeta();
+    syncURL();
+    if (!opts.silent) {
+      toast(
+        state.scenario
+          ? "Replaying “" + SCENARIOS[state.scenario].label + "” from seed " + state.seed + "."
+          : "Simulation reset to T+00:00 · seed " + state.seed + ".",
+        state.scenario ? "warn" : "ok"
+      );
+    }
   }
 
   function runAction(action) {
@@ -1006,6 +1107,7 @@
     if (!el.simClock) return;
 
     el.simClock.textContent = fmtClock(state.time);
+    if (el.runClock) el.runClock.textContent = fmtClock(state.time);
     const ops = opsState();
     el.simState.textContent = ops.label;
     el.simState.className = "ops-state" + (ops.tone ? " " + ops.tone : "");
@@ -1119,6 +1221,237 @@
     });
   }
 
+  /* ============================================================
+     Reproducible runs, share links & export
+     ============================================================ */
+
+  function scenarioLabel() {
+    return state.scenario && SCENARIOS[state.scenario] ? SCENARIOS[state.scenario].label : "Free run";
+  }
+
+  function updateRunMeta() {
+    if (el.runSeed) el.runSeed.textContent = String(state.seed);
+    if (el.runScenario) el.runScenario.textContent = scenarioLabel();
+    if (el.runClock) el.runClock.textContent = fmtClock(state.time);
+    if (el.runClear) el.runClear.hidden = !state.scenario;
+  }
+
+  function clearScenario() {
+    state.scenario = null;
+    resetSim({ scenario: null, silent: true });
+    toast("Free run — scenario cleared · seed " + state.seed + ".", "ok");
+    updateRunMeta();
+    syncURL();
+  }
+
+  function buildShareURL(anchor) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("seed", String(state.seed));
+    if (state.scenario) url.searchParams.set("scenario", state.scenario);
+    else url.searchParams.delete("scenario");
+    if (anchor && !url.hash) url.hash = "simulator";
+    return url.toString();
+  }
+
+  function syncURL() {
+    try {
+      window.history.replaceState(null, "", buildShareURL(false));
+    } catch (e) {
+      /* file:// or older browsers may reject history updates */
+    }
+  }
+
+  function readRunURL() {
+    const params = new URLSearchParams(window.location.search);
+    const seedParam = params.get("seed");
+    const parsed = seedParam !== null ? normalizeSeed(seedParam) : null;
+    state.seed = parsed !== null ? parsed : makeSeed();
+    const scenarioParam = (params.get("scenario") || "").toLowerCase();
+    state.scenario = SCENARIOS[scenarioParam] ? scenarioParam : null;
+  }
+
+  async function copyRunLink() {
+    const link = buildShareURL(true);
+    let copied = false;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(link);
+        copied = true;
+      }
+    } catch (e) {
+      copied = false;
+    }
+    if (!copied) {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = link;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.top = "-1000px";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        copied = document.execCommand("copy");
+        ta.remove();
+      } catch (e) {
+        copied = false;
+      }
+    }
+    toast(
+      copied
+        ? "Run link copied — seed " + state.seed + " · " + scenarioLabel() + "."
+        : "Copy blocked by the browser. The run URL is in the address bar.",
+      copied ? "ok" : "warn"
+    );
+  }
+
+  function buildRunSummary() {
+    const ops = opsState();
+    return {
+      app: "NEXUS AI",
+      kind: "simulation-run",
+      version: "1.0.0",
+      generatedAt: new Date().toISOString(),
+      seed: state.seed,
+      scenario: state.scenario
+        ? { id: state.scenario, label: scenarioLabel() }
+        : null,
+      clock: {
+        seconds: Math.round(state.time * 10) / 10,
+        label: fmtClock(state.time)
+      },
+      state: ops.label,
+      notes:
+        "Same seed + scenario reproduce the same random sequence. Real time and frame rate may differ.",
+      nodes: {
+        drones: CFG.count,
+        coordinators: 2,
+        connected: state.connectedCount,
+        failedDrones: state.failedDrones.slice(),
+        localGroups: state.groups.length,
+        avgHops: Number(state.avgHops.toFixed(2))
+      },
+      coordinators: {
+        mainActive: state.main.active,
+        backupActive: state.backup.active,
+        acting: state.acting || null,
+        handoverSeconds: Number(state.handoverTimer.toFixed(2)),
+        replicaAgeSeconds: Number(state.replicaAge.toFixed(2))
+      },
+      map: {
+        records: Math.round(state.records),
+        buffered: Math.round(state.buffered),
+        freshestSeconds: state.freshest ? Math.round(state.freshest) : null
+      },
+      links: {
+        total: state.edges.length,
+        mesh: state.edges.filter((e) => e.kind === "mesh").length,
+        tree: state.edges.filter((e) => e.tree).length
+      },
+      faults: {
+        storm: state.storm,
+        interference: state.interference,
+        recall: state.recall,
+        severedLinks: state.severed.map((s) => ({
+          a: s.a,
+          b: s.b,
+          atSeconds: Math.round(s.born * 10) / 10
+        })),
+        failedDrones: state.failedDrones.slice()
+      },
+      counters: {
+        packetsSpawned: state.stats.packets,
+        failovers: state.stats.failovers,
+        reconciliations: state.stats.reconciliations
+      },
+      events: state.log.slice(-200).map((e) => ({
+        atSeconds: e.at,
+        clock: e.clock,
+        tone: e.tone,
+        text: e.text
+      }))
+    };
+  }
+
+  function csvCell(value) {
+    const text = value === null || value === undefined ? "" : String(value);
+    return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+  }
+
+  function downloadText(name, mime, text) {
+    const blob = new Blob([text], { type: mime + ";charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function runFileName(extension) {
+    return (
+      "nexus-run-" +
+      state.seed +
+      "-" +
+      (state.scenario || "free") +
+      "." +
+      extension
+    );
+  }
+
+  function exportRunJSON() {
+    downloadText(runFileName("json"), "application/json", JSON.stringify(buildRunSummary(), null, 2));
+    toast("Run exported as JSON — seed " + state.seed + " · " + scenarioLabel() + ".", "ok");
+  }
+
+  function exportRunCSV() {
+    const s = buildRunSummary();
+    const rows = [
+      ["metric", "value"],
+      ["app", s.app],
+      ["generated_at", s.generatedAt],
+      ["seed", s.seed],
+      ["scenario", s.scenario ? s.scenario.id : "free"],
+      ["scenario_label", s.scenario ? s.scenario.label : "Free run"],
+      ["clock_seconds", s.clock.seconds],
+      ["clock_label", s.clock.label],
+      ["state", s.state],
+      ["drones_total", s.nodes.drones],
+      ["drones_connected", s.nodes.connected],
+      ["drones_failed", s.nodes.failedDrones.join(" ")],
+      ["local_groups", s.nodes.localGroups],
+      ["avg_hops", s.nodes.avgHops],
+      ["main_active", s.coordinators.mainActive],
+      ["backup_active", s.coordinators.backupActive],
+      ["acting_coordinator", s.coordinators.acting || "none"],
+      ["handover_seconds", s.coordinators.handoverSeconds],
+      ["replica_age_seconds", s.coordinators.replicaAgeSeconds],
+      ["records", s.map.records],
+      ["buffered", s.map.buffered],
+      ["freshest_seconds", s.map.freshestSeconds],
+      ["links_total", s.links.total],
+      ["links_mesh", s.links.mesh],
+      ["links_tree", s.links.tree],
+      ["packets_spawned", s.counters.packetsSpawned],
+      ["failovers", s.counters.failovers],
+      ["reconciliations", s.counters.reconciliations],
+      ["storm", s.faults.storm],
+      ["interference", s.faults.interference],
+      ["recall", s.faults.recall],
+      ["severed_links", s.faults.severedLinks.map((l) => l.a + "-" + l.b).join(" ")]
+    ];
+    const csv = rows.map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
+    downloadText(runFileName("csv"), "text/csv", csv);
+    toast("Run exported as CSV — seed " + state.seed + ".", "ok");
+  }
+
+  function rerollSeed() {
+    resetSim({ seed: makeSeed() });
+    syncURL();
+  }
+
   function setView(view, silent) {
     state.view = view === "topology" ? "topology" : "command";
     updateUI(true);
@@ -1169,6 +1502,7 @@
       if (state.handoverTimer === 0) {
         if (state.backup.active) {
           state.acting = "BKUP";
+          state.stats.failovers++;
           logEvent("Backup AI promoted to primary after a clean health check", "ok");
           toast("Backup AI is now primary. Shared state was preserved.", "ok");
         } else {
@@ -1214,6 +1548,7 @@
       state.records += drain;
       if (state.buffered < 0.4) {
         state.buffered = 0;
+        state.stats.reconciliations++;
         logEvent("Reconciliation complete — buffered records merged into the shared map", "ok");
         toast("Buffered records reconciled. The shared map is consistent again.", "ok");
       }
@@ -1244,10 +1579,11 @@
     const list = pool.length ? pool : fallback;
     if (!list.length) return;
     const e = pick(list);
+    state.stats.packets++;
     state.packets.push({
       a: e.a,
       b: e.b,
-      dir: Math.random() > 0.5,
+      dir: nextRandom() > 0.5,
       born: state.time,
       dur: rand(1.2, 2.4),
       size: rand(1.6, 2.8)
@@ -1260,12 +1596,16 @@
      Canvas setup & projection
      ============================================================ */
 
-  const stars = Array.from({ length: 80 }, () => ({
-    x: Math.random(),
-    y: Math.random(),
-    r: rand(0.3, 1.2),
-    a: rand(0.08, 0.4)
-  }));
+  let stars = [];
+
+  function makeStars() {
+    stars = Array.from({ length: 80 }, () => ({
+      x: nextRandom(),
+      y: nextRandom(),
+      r: rand(0.3, 1.2),
+      a: rand(0.08, 0.4)
+    }));
+  }
 
   function setupCanvas() {
     state.canvas = $("#ops-canvas");
@@ -2700,7 +3040,12 @@
 
   function bindUI() {
     if (el.simPause) el.simPause.addEventListener("click", togglePause);
-    if (el.simReset) el.simReset.addEventListener("click", resetSim);
+    if (el.simReset) el.simReset.addEventListener("click", () => resetSim());
+    if (el.runSeed) el.runSeed.addEventListener("click", rerollSeed);
+    if (el.runClear) el.runClear.addEventListener("click", clearScenario);
+    if (el.runCopy) el.runCopy.addEventListener("click", copyRunLink);
+    if (el.runExport) el.runExport.addEventListener("click", exportRunJSON);
+    if (el.runCsv) el.runCsv.addEventListener("click", exportRunCSV);
     updatePauseButton();
     updateSpeedButtons();
 
@@ -2817,16 +3162,26 @@
   }
 
   function boot() {
+    readRunURL();
+    setSeed(state.seed);
+    makeStars();
     makeDrones();
     setupCanvas();
     buildFleet();
     bindUI();
     initLogs();
     computeNetwork();
+    if (state.scenario) applyScenarioFaults(state.scenario);
     setCamera("overview");
     updatePauseButton();
     updateSpeedButtons();
     updateUI(true);
+    updateRunMeta();
+    syncURL();
+    if (state.scenario) {
+      logEvent("Run loaded from link · seed " + state.seed + " · " + SCENARIOS[state.scenario].label, "ok");
+      toast(SCENARIOS[state.scenario].toast, "warn");
+    }
     requestAnimationFrame(frame);
   }
 
