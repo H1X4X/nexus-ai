@@ -11,7 +11,7 @@ The site combines the full proposal with a working browser-based simulation: 12 
 - **Engineering proposal** — architecture, operating process, self-healing behavior, shared map, storage, human supervision, security, applications, challenges, roadmap, and vision.
 - **Live command center** — an interactive 3D mesh simulator with topology view, camera presets, layer controls, node inspector, event log, scenarios, and keyboard shortcuts.
 - **Reproducible runs** — seeded scenarios with shareable links and JSON/CSV export.
-- **Shared environmental map** — 4 battlefield maps with terrain, water, forests, buildings and roads, 4 situations, and live/stale/lost feature freshness.
+- **Shared environmental map** — 8 battlefield maps with terrain, water, forests, buildings and roads, 4 situations, and live/stale/lost feature freshness.
 - **14 simulated nodes** — 12 drones plus Main AI and Backup AI.
 - **Self-contained assets** — no external fonts, trackers, or runtime data requests. The 3D map vendors Three.js r128 locally under `assets/vendor/` (loaded as a classic script, no CDN).
 
@@ -29,7 +29,7 @@ Open `index.html` directly in a browser, or serve this folder with any static fi
 
 Use the fault buttons to sever links, create interference or a storm partition, fail a drone, or take down the Main or Backup AI. Use **Restore everything** to watch the mesh and buffered records reconcile.
 
-The shared environmental map is the other half of the simulation. Pick a **map** (wildfire, flood, search & rescue, or industrial) and a **situation** (routine watch, rapid spread, night search, or comms blackout) from the bar above the canvas. Each map is a true 3D battlefield — hillfield terrain with vertex colors and hillshade, a water plane, instanced forest cones, rocks, buildings, roads and coordinator bases — rendered with Three.js WebGL, with drones, links, packets and features (ground truth + shared-map rings, beams, diamonds and labels) synced from the same simulation state. The 2D canvas remains as a topology view and as an automatic fallback if WebGL is unavailable. Each feature is live only while a connected drone has it in sensor range; otherwise its record ages through **stale** and **lost**. **Run drill** plays an automated sequence — a storm partition at 0.9 s, a lost drone at 2.8 s, and a full restore at 7 s — so the freshness behavior can be watched without manual fault injection.
+The shared environmental map is the other half of the simulation. Pick a **map** (wildfire, flood, search & rescue, industrial, urban, mountain, coast, or battlefield) and a **situation** (routine watch, rapid spread, night search, or comms blackout) from the bar above the canvas. Each map is a true 3D battlefield — hillfield terrain with vertex colors and hillshade, a water plane, instanced forest cones, rocks, buildings, roads and coordinator bases — rendered with Three.js WebGL, with drones, links, packets and features (ground truth + shared-map rings, beams, diamonds and labels) synced from the same simulation state. The 2D canvas remains as a topology view and as an automatic fallback if WebGL is unavailable. Each feature is live only while a connected drone has it in sensor range; otherwise its record ages through **stale** and **lost**. **Run drill** plays an automated sequence — a storm partition at 0.9 s, a lost drone at 2.8 s, and a full restore at 7 s — so the freshness behavior can be watched without manual fault injection.
 
 ## Reproducible runs
 
@@ -41,7 +41,7 @@ Every simulated random choice comes from one seeded generator. The current run i
 
 - `seed` — integer seed; the same seed reproduces the same drone layout, battery levels, packet choices, and fault picks.
 - `scenario` — `mesh`, `main`, `drone`, or omit for a free run.
-- `map` — monitored area: `wildfire`, `flood`, `sar`, or `industrial`.
+- `map` — monitored area: `wildfire`, `flood`, `sar`, `industrial`, `urban`, `mountain`, `coast`, or `battlefield`.
 - `situation` — `routine`, `spread`, `night`, or `blackout`.
 
 Use the run bar above the simulator to:

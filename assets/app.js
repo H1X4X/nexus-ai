@@ -242,6 +242,103 @@
         { id: "V1", type: "vehicle", label: "Vehicle 1", x: 1.4, z: 8.8, r: 1.2 },
         { id: "S1", type: "survivor", label: "Worker 1", x: -10.6, z: -2.8, r: 1.1 }
       ]
+    },
+    urban: {
+      id: "urban",
+      label: "Urban",
+      place: "Downtown grid · Block survey",
+      hint: "Dense blocks, roads and vehicles. Watch cover between buildings.",
+      palette: {
+        ground: "rgba(30, 41, 59, 0.2)",
+        edge: "rgba(103, 232, 249, 0.3)",
+        line: "rgba(103, 232, 249, 0.12)"
+      },
+      decor: [
+        { kind: "rect", x1: -15, z1: -15, x2: 15, z2: -15.5, color: "rgba(148, 163, 184, 0.08)" },
+        { kind: "rect", x1: -15, z1: 15, x2: 15, z2: 15.5, color: "rgba(148, 163, 184, 0.08)" }
+      ],
+      features: [
+        { id: "S1", type: "survivor", label: "Survivor 1", x: -8.2, z: -8.4, r: 1.1 },
+        { id: "S2", type: "survivor", label: "Survivor 2", x: 9.2, z: 7.4, r: 1.1 },
+        { id: "V1", type: "vehicle", label: "Vehicle 1", x: 3.2, z: -9.4, r: 1.3 },
+        { id: "H1", type: "hazard", label: "Collapse 1", x: 7.2, z: -3.2, r: 2.4 },
+        { id: "B1", type: "structure", label: "Office 1", x: -11.2, z: 9.2, r: 2.2 },
+        { id: "F1", type: "fire", label: "Fire 1", x: 11.4, z: -9.8, r: 2.2 }
+      ]
+    },
+    mountain: {
+      id: "mountain",
+      label: "Mountain",
+      place: "High ridge · Summit trails",
+      hint: "High ground and thin trails. Survivors above the treeline.",
+      palette: {
+        ground: "rgba(100, 116, 139, 0.15)",
+        edge: "rgba(148, 163, 184, 0.3)",
+        line: "rgba(148, 163, 184, 0.12)"
+      },
+      decor: [
+        { kind: "ellipse", x: 5, z: 8, rx: 12, rz: 9, color: "rgba(148, 163, 184, 0.07)" },
+        { kind: "ellipse", x: -8, z: -8, rx: 10, rz: 8, color: "rgba(148, 163, 184, 0.06)" }
+      ],
+      features: [
+        { id: "S1", type: "survivor", label: "Survivor 1", x: -6.0, z: 8.2, r: 1.1 },
+        { id: "S2", type: "survivor", label: "Survivor 2", x: 10.2, z: -11.4, r: 1.1 },
+        { id: "F1", type: "fire", label: "Fire 1", x: 7.4, z: 6.2, r: 2.4 },
+        { id: "H1", type: "hotspot", label: "Hotspot 1", x: -11.4, z: 2.2, r: 1.9 },
+        { id: "B1", type: "structure", label: "Hut 1", x: -9.4, z: -8.4, r: 2.0 },
+        { id: "V1", type: "vehicle", label: "Vehicle 1", x: 2.2, z: -13.2, r: 1.3 }
+      ]
+    },
+    coast: {
+      id: "coast",
+      label: "Coast",
+      place: "Harbor mouth · Beach line",
+      hint: "Shoreline, boats and stranded people. Watch the waterline.",
+      palette: {
+        ground: "rgba(8, 47, 73, 0.2)",
+        edge: "rgba(56, 189, 248, 0.32)",
+        line: "rgba(56, 189, 248, 0.13)"
+      },
+      decor: [
+        {
+          kind: "poly",
+          points: [[-20, 2], [-8, 4], [4, 3], [14, 5], [20, 3], [20, 20], [-20, 20]],
+          color: "rgba(14, 116, 144, 0.18)"
+        },
+        { kind: "rect", x1: -19, z1: -3, x2: 19, z2: -1.2, color: "rgba(217, 196, 147, 0.1)" }
+      ],
+      features: [
+        { id: "W1", type: "flood", label: "Tide 1", x: 0.4, z: 6.4, r: 4.2 },
+        { id: "S1", type: "survivor", label: "Survivor 1", x: -8.4, z: -2.2, r: 1.1 },
+        { id: "S2", type: "survivor", label: "Survivor 2", x: 9.4, z: -3.4, r: 1.1 },
+        { id: "V1", type: "vehicle", label: "Boat 1", x: 5.2, z: 8.6, r: 1.4 },
+        { id: "B1", type: "structure", label: "Harbor 1", x: -11.2, z: 7.4, r: 2.2 },
+        { id: "H1", type: "hazard", label: "Rocks 1", x: 2.4, z: -9.4, r: 1.9 }
+      ]
+    },
+    battlefield: {
+      id: "battlefield",
+      label: "Battlefield",
+      place: "Training field · Cratered plain",
+      hint: "Craters, trenches and cover in a full battlefield scene. Watch the open ground.",
+      palette: {
+        ground: "rgba(120, 53, 15, 0.16)",
+        edge: "rgba(251, 163, 74, 0.3)",
+        line: "rgba(251, 163, 74, 0.12)"
+      },
+      decor: [
+        { kind: "ellipse", x: -7, z: 5, rx: 7, rz: 6, color: "rgba(120, 53, 15, 0.12)" },
+        { kind: "ellipse", x: 6, z: -6, rx: 7, rz: 6, color: "rgba(120, 53, 15, 0.12)" },
+        { kind: "ellipse", x: 9, z: 7, rx: 6, rz: 5, color: "rgba(251, 113, 133, 0.08)" }
+      ],
+      features: [
+        { id: "H1", type: "hazard", label: "Crater 1", x: -7.2, z: 5.2, r: 3.0 },
+        { id: "H2", type: "hazard", label: "Trench 1", x: 6.2, z: -6.4, r: 2.4 },
+        { id: "F1", type: "fire", label: "Fire 1", x: 9.2, z: 7.4, r: 2.4 },
+        { id: "S1", type: "survivor", label: "Survivor 1", x: -3.2, z: -9.2, r: 1.1 },
+        { id: "V1", type: "vehicle", label: "Vehicle 1", x: 2.4, z: 10.2, r: 1.3 },
+        { id: "B1", type: "structure", label: "Bunker 1", x: -11.2, z: -4.2, r: 2.2 }
+      ]
     }
   };
 
@@ -365,6 +462,77 @@
         { x: -14.5, z: 0.0, w: 2.0, d: 1.6, h: 1.1, type: "tank" },
         { x: 14.5, z: 0.0, w: 2.0, d: 1.6, h: 1.1, type: "tank" }
       ]
+    },
+    urban: {
+      heightScale: 0.03, heightBase: 0.18, waterLevel: 0.15,
+      low: [0.08, 0.10, 0.13], mid: [0.14, 0.17, 0.21], high: [0.30, 0.34, 0.40],
+      water: [0.15, 0.35, 0.55],
+      treeCount: 15, treeHue: [0.28, 0.36], rockCount: 8,
+      forestZones: [
+        { x: -15, z: -15, rx: 5, rz: 5 }, { x: 15, z: 15, rx: 5, rz: 5 }
+      ],
+      sparse: 0.02,
+      roads: [[[-19, -6], [19, -6]], [[-19, 6], [19, 6]], [[-6, -19], [-6, 19]], [[6, -19], [6, 19]]],
+      buildings: [
+        { x: -12, z: -12, w: 3.4, d: 3.2, h: 2.4, type: "plant" },
+        { x: -12, z: 0, w: 3.4, d: 3.2, h: 3.0, type: "plant" },
+        { x: -12, z: 12, w: 3.4, d: 3.2, h: 2.6, type: "plant" },
+        { x: 0, z: -12, w: 3.4, d: 3.2, h: 2.2, type: "plant" },
+        { x: 0, z: 12, w: 3.4, d: 3.2, h: 2.8, type: "plant" },
+        { x: 12, z: -12, w: 3.4, d: 3.2, h: 3.0, type: "plant" },
+        { x: 12, z: 0, w: 3.4, d: 3.2, h: 2.4, type: "plant" },
+        { x: 12, z: 12, w: 3.4, d: 3.2, h: 2.6, type: "plant" },
+        { x: -11.2, z: 9.2, w: 2.8, d: 2.6, h: 1.6, type: "house" }
+      ]
+    },
+    mountain: {
+      heightScale: 0.16, heightBase: 0.3, waterLevel: 0.2,
+      low: [0.05, 0.08, 0.10], mid: [0.10, 0.16, 0.18], high: [0.28, 0.32, 0.34],
+      water: [0.10, 0.35, 0.55],
+      treeCount: 180, treeHue: [0.28, 0.36], rockCount: 50,
+      forestZones: [
+        { x: -10, z: 8, rx: 12, rz: 10 }, { x: 5, z: -4, rx: 12, rz: 10 }
+      ],
+      sparse: 0.2,
+      roads: [[[-15, -15], [-5, -5], [5, 0], [15, 8]]],
+      buildings: [
+        { x: -9, z: -8, w: 2.4, d: 2.0, h: 0.8, type: "cabin" },
+        { x: 0, z: 14, w: 1.6, d: 1.6, h: 2.2, type: "tower" },
+        { x: 12, z: -6, w: 2.0, d: 1.6, h: 0.7, type: "house" }
+      ]
+    },
+    coast: {
+      heightScale: 0.09, heightBase: 0.0, waterLevel: 1.15,
+      low: [0.04, 0.10, 0.18], mid: [0.32, 0.28, 0.16], high: [0.14, 0.24, 0.18],
+      water: [0.12, 0.45, 0.75],
+      treeCount: 60, treeHue: [0.30, 0.40], rockCount: 24,
+      forestZones: [
+        { x: -10, z: -10, rx: 10, rz: 8 }, { x: 10, z: -12, rx: 10, rz: 8 }
+      ],
+      sparse: 0.1,
+      roads: [[[-19, -2], [19, -2]]],
+      buildings: [
+        { x: -12, z: 8, w: 2.4, d: 2.0, h: 0.9, type: "house" },
+        { x: 12, z: 8, w: 2.4, d: 2.0, h: 0.9, type: "house" },
+        { x: -11.2, z: 7.4, w: 2.6, d: 2.2, h: 0.8, type: "cabin" }
+      ]
+    },
+    battlefield: {
+      heightScale: 0.14, heightBase: 0.12, waterLevel: 0.3,
+      low: [0.11, 0.08, 0.05], mid: [0.16, 0.12, 0.07], high: [0.24, 0.20, 0.12],
+      water: [0.12, 0.25, 0.30],
+      treeCount: 90, treeHue: [0.22, 0.30], rockCount: 60,
+      forestZones: [
+        { x: -12, z: -12, rx: 9, rz: 8 }, { x: 12, z: 12, rx: 9, rz: 8 }
+      ],
+      sparse: 0.12,
+      roads: [[[-19, 0], [19, 0]], [[0, -19], [0, 19]]],
+      buildings: [
+        { x: -11.2, z: -4.2, w: 2.6, d: 2.2, h: 0.7, type: "plant" },
+        { x: 8, z: -8, w: 2.4, d: 2.0, h: 0.6, type: "plant" },
+        { x: -10, z: 9, w: 2.4, d: 2.0, h: 0.6, type: "plant" },
+        { x: 0, z: -13.5, w: 1.6, d: 1.6, h: 2.2, type: "tower" }
+      ]
     }
   };
 
@@ -412,6 +580,13 @@
     let h = (n - 3) * terr.heightScale + terr.heightBase;
     if (mapId === "industrial") h += 0.12 * Math.sin(x * 1.7) * Math.cos(z * 1.5);
     if (mapId === "flood") h += 0.15 * Math.sin(x * 0.6 + z * 0.4);
+    if (mapId === "urban") h += 0.06 * Math.sin(x * 1.9) * Math.cos(z * 1.7);
+    if (mapId === "coast") h -= z * 0.035;
+    if (mapId === "battlefield") {
+      h -= 0.55 * Math.exp(-((x + 7) * (x + 7) + (z - 5) * (z - 5)) / 18);
+      h -= 0.5 * Math.exp(-((x - 6) * (x - 6) + (z + 6) * (z + 6)) / 16);
+      h -= 0.4 * Math.exp(-((x - 9) * (x - 9) + (z - 7) * (z - 7)) / 14);
+    }
     return clamp(h, -0.7, 3.9);
   }
 
