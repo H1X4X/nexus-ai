@@ -95,10 +95,10 @@
   const STORM_X = 2.4;
 
   const CAM_PRESETS = {
-    overview: { yaw: -0.65, pitch: 0.5, dist: 37, target: [0, 4.4, 0], auto: false },
-    top: { yaw: 0, pitch: 1.47, dist: 42, target: [0, 1.2, 0], auto: false },
-    front: { yaw: -1.48, pitch: 0.2, dist: 35, target: [0, 5.0, 0], auto: false },
-    orbit: { yaw: -0.65, pitch: 0.42, dist: 37, target: [0, 4.4, 0], auto: true }
+    overview: { yaw: -0.65, pitch: 0.52, dist: 38, target: [0, 2.4, 0], auto: false },
+    top: { yaw: 0, pitch: 1.47, dist: 42, target: [0, 0.6, 0], auto: false },
+    front: { yaw: -1.48, pitch: 0.24, dist: 35, target: [0, 2.6, 0], auto: false },
+    orbit: { yaw: -0.65, pitch: 0.44, dist: 38, target: [0, 2.4, 0], auto: true }
   };
 
   const SCENARIOS = {
@@ -290,6 +290,227 @@
   const currentMap = () => MAPS[state.mapId] || MAPS.wildfire;
   const currentSituation = () => SITUATIONS[state.situation] || SITUATIONS.routine;
 
+  /* ---------------- battlefield terrain (arena-inspired) ----------------
+     Each map gets a full battlefield look: heightfield hills, water,
+     forest cones, rocks, buildings and roads. The height function mirrors
+     the reference's smoothed noise hillfield, scaled from 240x240 arena
+     units into the 39x39 simulator world. Layout is deterministic per map
+     so every run shows the same battlefield. */
+
+  const MAP_TERRAIN = {
+    wildfire: {
+      heightScale: 0.115, heightBase: 0.15, waterLevel: 0.25,
+      low: [0.09, 0.07, 0.04], mid: [0.08, 0.16, 0.10], high: [0.22, 0.30, 0.20],
+      water: [0.10, 0.45, 0.75],
+      treeCount: 150, treeHue: [0.24, 0.31], rockCount: 28,
+      forestZones: [
+        { x: -10, z: 8, rx: 12, rz: 9 }, { x: 10, z: -10, rx: 11, rz: 8 }, { x: -4, z: -12, rx: 10, rz: 7 }
+      ],
+      sparse: 0.15,
+      roads: [[[-19, 10], [-8, 4], [4, -2], [19, -8]]],
+      buildings: [
+        { x: -12.5, z: 11.5, w: 2.0, d: 1.6, h: 0.8, type: "cabin" },
+        { x: 11.0, z: 11.0, w: 2.4, d: 1.8, h: 1.1, type: "cabin" },
+        { x: 0.0, z: -13.5, w: 1.6, d: 1.6, h: 2.2, type: "tower" }
+      ]
+    },
+    flood: {
+      heightScale: 0.075, heightBase: 0.05, waterLevel: 0.85,
+      low: [0.03, 0.10, 0.18], mid: [0.05, 0.20, 0.26], high: [0.16, 0.32, 0.36],
+      water: [0.09, 0.38, 0.68],
+      treeCount: 70, treeHue: [0.32, 0.42], rockCount: 18,
+      forestZones: [
+        { x: -12, z: -10, rx: 10, rz: 8 }, { x: 12, z: 10, rx: 9, rz: 8 }
+      ],
+      sparse: 0.08,
+      roads: [[[-19, -12], [0, -8], [19, -4]]],
+      buildings: [
+        { x: -13.5, z: -12.0, w: 2.2, d: 1.8, h: 0.9, type: "house" },
+        { x: 13.5, z: -12.5, w: 2.4, d: 1.8, h: 1.0, type: "house" },
+        { x: -11.0, z: -4.5, w: 5.5, d: 1.2, h: 0.5, type: "bridge" },
+        { x: 0.0, z: -6.0, w: 2.0, d: 1.6, h: 0.9, type: "house" }
+      ]
+    },
+    sar: {
+      heightScale: 0.105, heightBase: 0.10, waterLevel: 0.30,
+      low: [0.03, 0.12, 0.10], mid: [0.05, 0.24, 0.17], high: [0.18, 0.38, 0.30],
+      water: [0.10, 0.45, 0.75],
+      treeCount: 230, treeHue: [0.33, 0.44], rockCount: 36,
+      forestZones: [
+        { x: -10, z: 6, rx: 13, rz: 10 }, { x: 9, z: -8, rx: 12, rz: 9 }, { x: 0, z: 0, rx: 14, rz: 12 }
+      ],
+      sparse: 0.35,
+      roads: [[[-19, 0], [19, 0]], [[0, -19], [0, 19]]],
+      buildings: [
+        { x: -10.4, z: -4.2, w: 2.6, d: 2.0, h: 0.8, type: "cabin" },
+        { x: 6.0, z: 12.5, w: 2.0, d: 1.6, h: 0.7, type: "cabin" }
+      ]
+    },
+    industrial: {
+      heightScale: 0.055, heightBase: 0.18, waterLevel: 0.20,
+      low: [0.06, 0.06, 0.07], mid: [0.12, 0.12, 0.13], high: [0.26, 0.26, 0.27],
+      water: [0.08, 0.30, 0.42],
+      treeCount: 28, treeHue: [0.25, 0.35], rockCount: 22,
+      forestZones: [
+        { x: -14, z: 14, rx: 8, rz: 6 }, { x: 14, z: -14, rx: 8, rz: 6 }
+      ],
+      sparse: 0.03,
+      roads: [[[-19, -6], [19, -6]], [[-6, 19], [-6, -19]]],
+      buildings: [
+        { x: -10, z: -7, w: 3.2, d: 2.4, h: 1.5, type: "plant" },
+        { x: 7, z: -9.5, w: 3.6, d: 2.6, h: 1.8, type: "plant" },
+        { x: -7, z: 7.5, w: 3.0, d: 2.2, h: 1.3, type: "plant" },
+        { x: 9.5, z: 9.0, w: 3.4, d: 2.4, h: 1.6, type: "plant" },
+        { x: 0.0, z: 0.0, w: 1.2, d: 1.2, h: 2.4, type: "tower" },
+        { x: -14.5, z: 0.0, w: 2.0, d: 1.6, h: 1.1, type: "tank" },
+        { x: 14.5, z: 0.0, w: 2.0, d: 1.6, h: 1.1, type: "tank" }
+      ]
+    }
+  };
+
+  function hashString(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a = (a + 0x6d2b79f5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function sstep(a, b, x) {
+    const t = clamp((x - a) / (b - a), 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+
+  function terrainHeightFor(mapId, x, z) {
+    const terr = MAP_TERRAIN[mapId] || MAP_TERRAIN.wildfire;
+    const X = x * 6, Z = z * 6;
+    let n = 12
+      + 9 * Math.sin(X * 0.035 + 1.3) * Math.cos(Z * 0.03)
+      + 5 * Math.sin(X * 0.07 + Z * 0.05)
+      + 2.5 * Math.sin(X * 0.15 - Z * 0.11)
+      + 3 * Math.cos(Z * 0.09 + X * 0.02);
+    n -= 17 * Math.exp(-((X - 52) * (X - 52) + (Z - 58) * (Z - 58)) / 650);
+    // Flatten pads at the Main and Backup AI so the bases sit level.
+    const flats = [{ x: 0, z: 0 }, { x: -37.2, z: -37.2 }];
+    for (const f of flats) {
+      const l = Math.hypot(X - f.x, Z - f.z);
+      const c = 1 - sstep(14, 32, l);
+      n = n * (1 - c) + 12 * c;
+    }
+    let h = (n - 3) * terr.heightScale + terr.heightBase;
+    if (mapId === "industrial") h += 0.12 * Math.sin(x * 1.7) * Math.cos(z * 1.5);
+    if (mapId === "flood") h += 0.15 * Math.sin(x * 0.6 + z * 0.4);
+    return clamp(h, -0.7, 3.9);
+  }
+
+  function heightAt(x, z) {
+    const cache = state.terrain;
+    if (!cache || cache.mapId !== state.mapId) return terrainHeightFor(state.mapId, x, z);
+    const N = cache.gridN, extent = cache.extent, step = cache.step;
+    const gx = clamp((x + extent) / step, 0, N - 0.001);
+    const gz = clamp((z + extent) / step, 0, N - 0.001);
+    const i = Math.floor(gx), j = Math.floor(gz);
+    const fx = gx - i, fz = gz - j;
+    const W = N + 1;
+    const h00 = cache.heights[j * W + i];
+    const h10 = cache.heights[j * W + i + 1];
+    const h01 = cache.heights[(j + 1) * W + i];
+    const h11 = cache.heights[(j + 1) * W + i + 1];
+    return h00 + (h10 - h00) * fx + (h01 - h00) * fz + (h00 - h10 - h01 + h11) * fx * fz;
+  }
+
+  function buildTerrain(mapId) {
+    const terr = MAP_TERRAIN[mapId] || MAP_TERRAIN.wildfire;
+    const map = MAPS[mapId] || MAPS.wildfire;
+    const N = 30, extent = 19.5, step = (extent * 2) / N;
+    const heights = new Float32Array((N + 1) * (N + 1));
+    for (let j = 0; j <= N; j++) {
+      for (let i = 0; i <= N; i++) {
+        const x = -extent + i * step, z = -extent + j * step;
+        heights[j * (N + 1) + i] = terrainHeightFor(mapId, x, z);
+      }
+    }
+    const hazardTypes = { fire: true, hotspot: true, hazard: true, flood: true };
+    const scorch = new Float32Array((N + 1) * (N + 1));
+    for (let j = 0; j <= N; j++) {
+      for (let i = 0; i <= N; i++) {
+        const x = -extent + i * step, z = -extent + j * step;
+        let s = 0;
+        for (const f of map.features) {
+          if (!hazardTypes[f.type]) continue;
+          const s2 = clamp(1 - Math.hypot(x - f.x, z - f.z) / (f.r * 2.4), 0, 1);
+          if (s2 > s) s = s2;
+        }
+        scorch[j * (N + 1) + i] = s;
+      }
+    }
+    const rng = mulberry32(hashString("nexus-" + mapId + "-terrain"));
+    const features = map.features;
+    const trees = [];
+    let attempts = 0;
+    while (trees.length < terr.treeCount && attempts < 9000) {
+      attempts++;
+      const x = (rng() * 2 - 1) * 19, z = (rng() * 2 - 1) * 19;
+      const h = terrainHeightFor(mapId, x, z);
+      if (h < terr.waterLevel + 0.28 || h > 3.4) continue;
+      if (Math.hypot(x, z) < 3.4 || Math.hypot(x + 6.2, z + 6.2) < 3.4) continue;
+      let bad = false;
+      for (const f of features) {
+        if (Math.hypot(x - f.x, z - f.z) < f.r + 0.7) { bad = true; break; }
+      }
+      if (bad) continue;
+      let inside = false;
+      for (const zone of terr.forestZones) {
+        const dx = (x - zone.x) / zone.rx, dz = (z - zone.z) / zone.rz;
+        if (dx * dx + dz * dz < 1) { inside = true; break; }
+      }
+      if (rng() > (inside ? 1 : terr.sparse)) continue;
+      trees.push({
+        x, z,
+        scale: 0.7 + rng() * 0.9,
+        hue: terr.treeHue[0] + rng() * (terr.treeHue[1] - terr.treeHue[0]),
+        sat: 0.45 + rng() * 0.2,
+        light: 0.14 + rng() * 0.12
+      });
+    }
+    const rocks = [];
+    let rockAttempts = 0;
+    while (rocks.length < terr.rockCount && rockAttempts < 3000) {
+      rockAttempts++;
+      const x = (rng() * 2 - 1) * 19, z = (rng() * 2 - 1) * 19;
+      const h = terrainHeightFor(mapId, x, z);
+      if (h < terr.waterLevel + 0.05 || h > 3.6) continue;
+      if (Math.hypot(x, z) < 3.0) continue;
+      rocks.push({ x, z, scale: 0.3 + rng() * 0.55, shade: 0.3 + rng() * 0.4 });
+    }
+    const buildings = terr.buildings.map((b) => ({
+      x: b.x + (rng() - 0.5) * 0.4, z: b.z + (rng() - 0.5) * 0.4,
+      w: b.w, d: b.d, h: b.h, type: b.type
+    }));
+    state.terrain = {
+      mapId, gridN: N, extent, step, heights, scorch, trees, rocks, buildings,
+      roads: terr.roads, waterLevel: terr.waterLevel
+    };
+    state.terrainSignature = mapId;
+  }
+
+  function mixRGB(a, b, t) {
+    return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+  }
+
+
 
   /* ---------------- state ---------------- */
 
@@ -354,8 +575,10 @@
     freshest: 1,
     groupMembers: 0,
     drones: [],
-    camera: { yaw: -0.65, pitch: 0.5, dist: 37, target: [0, 4.4, 0], auto: false },
-    camGoal: { yaw: -0.65, pitch: 0.5, dist: 37, target: [0, 4.4, 0], auto: false },
+    terrain: null,
+    terrainSignature: "",
+    camera: { yaw: -0.65, pitch: 0.52, dist: 38, target: [0, 2.4, 0], auto: false },
+    camGoal: { yaw: -0.65, pitch: 0.52, dist: 38, target: [0, 2.4, 0], auto: false },
     dragging: false,
     dragMoved: 0,
     pinch: null,
@@ -418,7 +641,8 @@
       d.y = lerp(d.baseY, 2.4, d.recallMix);
       d.pos.x = Math.cos(d.angle) * d.radius;
       d.pos.z = Math.sin(d.angle) * d.radius;
-      d.pos.y = d.y + Math.sin(state.time * 0.9 + d.phase) * 0.22;
+      const bob = Math.sin(state.time * 0.9 + d.phase) * 0.22;
+      d.pos.y = Math.max(d.y + bob, heightAt(d.pos.x, d.pos.z) + 1.35);
       if (!d.failed) d.battery = Math.max(18, d.battery - dt * 0.018);
     }
   }
@@ -426,6 +650,7 @@
   /* ---------------- shared environmental map model ---------------- */
 
   function makeFeatures() {
+    buildTerrain(state.mapId);
     const map = currentMap();
     state.features = map.features.map((def, index) => ({
       id: def.id,
@@ -2240,47 +2465,339 @@
     return pts;
   }
 
-  function drawMapGround(t) {
-    const map = currentMap();
+  function terrainColorFor(h, shade, scorchVal, terr, sx, sz) {
+    const t = clamp((h + 0.3) / 3.6, 0, 1);
+    let c = t < 0.5 ? mixRGB(terr.low, terr.mid, t * 2) : mixRGB(terr.mid, terr.high, (t - 0.5) * 2);
+    const k = 0.45 + 0.8 * shade;
+    c = [c[0] * k, c[1] * k, c[2] * k];
+    if (scorchVal > 0.01) c = mixRGB(c, [0.07, 0.05, 0.03], scorchVal * 0.6);
+    const r = Math.max(Math.abs(sx), Math.abs(sz));
+    const fade = sstep(15.5, 19.5, r);
+    if (fade > 0) c = mixRGB(c, [0.012, 0.04, 0.07], fade * 0.6);
+    return "rgb(" + Math.round(c[0] * 255) + "," + Math.round(c[1] * 255) + "," + Math.round(c[2] * 255) + ")";
+  }
+
+  function drawTerrainMesh(t) {
+    const terr = MAP_TERRAIN[state.mapId] || MAP_TERRAIN.wildfire;
+    const cache = state.terrain;
+    if (!cache || cache.mapId !== state.mapId) buildTerrain(state.mapId);
+    if (!state.terrain) return;
+    const c = state.terrain;
     const ctx = state.ctx;
-
-    drawGroundShape(
-      [[-19.5, -19.5], [19.5, -19.5], [19.5, 19.5], [-19.5, 19.5]],
-      0.005,
-      map.palette.ground,
-      map.palette.edge
-    );
-
-    for (const decor of map.decor || []) {
-      if (decor.kind === "ellipse") {
-        drawGroundShape(ellipsePoints(decor.x, decor.z, decor.rx, decor.rz, 52), 0.008, decor.color, null);
-      } else if (decor.kind === "poly") {
-        drawGroundShape(decor.points, 0.008, decor.color, null);
-      } else if (decor.kind === "rect") {
-        drawGroundShape(
-          [[decor.x1, decor.z1], [decor.x2, decor.z1], [decor.x2, decor.z2], [decor.x1, decor.z2]],
-          0.008,
-          decor.color,
-          null
-        );
+    const N = c.gridN, step = c.step, extent = c.extent, W = N + 1;
+    const pts = new Array(W * W);
+    for (let j = 0; j <= N; j++) {
+      for (let i = 0; i <= N; i++) {
+        const x = -extent + i * step, z = -extent + j * step;
+        const h = c.heights[j * W + i];
+        pts[j * W + i] = projectPoint({ x, y: h + 0.02, z });
       }
     }
-
-    ctx.strokeStyle = map.palette.line;
-    ctx.lineWidth = 1;
-    for (let i = 1; i <= 3; i++) {
-      const pts = ellipsePoints(0, 0, i * 6.2, i * 6.2, 64);
-      const projected = pts.map((p) => projectPoint({ x: p[0], y: 0.012, z: p[1] }));
-      if (!projected.every(Boolean)) continue;
-      ctx.beginPath();
-      ctx.moveTo(projected[0].x, projected[0].y);
-      for (let k = 1; k < projected.length; k++) ctx.lineTo(projected[k].x, projected[k].y);
-      ctx.closePath();
-      ctx.stroke();
+    const cells = [];
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        const a = pts[j * W + i], b = pts[j * W + i + 1];
+        const d = pts[(j + 1) * W + i], e = pts[(j + 1) * W + i + 1];
+        if (!a || !b || !d || !e) continue;
+        cells.push({ i, j, a, b, d, e, z: (a.z + b.z + d.z + e.z) / 4 });
+      }
     }
+    cells.sort((p, q) => q.z - p.z);
+    const water = terr.water;
+    const wl = c.waterLevel;
+    for (const cell of cells) {
+      const { i, j } = cell;
+      const hAvg = (c.heights[j * W + i] + c.heights[j * W + i + 1] + c.heights[(j + 1) * W + i] + c.heights[(j + 1) * W + i + 1]) / 4;
+      // hillshade from grid gradient
+      const hL = c.heights[j * W + Math.max(0, i - 1)], hR = c.heights[j * W + Math.min(N, i + 1)];
+      const hT = c.heights[Math.max(0, j - 1) * W + i], hB = c.heights[Math.min(N, j + 1) * W + i];
+      const dhdx = (hR - hL) / (2 * step), dhdz = (hB - hT) / (2 * step);
+      const inv = 1 / Math.sqrt(dhdx * dhdx + 1 + dhdz * dhdz);
+      const nx = -dhdx * inv, ny = inv, nz = -dhdz * inv;
+      const diff = clamp(nx * 0.45 + ny * 0.8 + nz * 0.35, 0, 1);
+      const sc = (c.scorch[j * W + i] + c.scorch[j * W + i + 1] + c.scorch[(j + 1) * W + i] + c.scorch[(j + 1) * W + i + 1]) / 4;
+      const sx = -extent + (i + 0.5) * step, sz = -extent + (j + 0.5) * step;
+      ctx.beginPath();
+      ctx.moveTo(cell.a.x, cell.a.y);
+      ctx.lineTo(cell.b.x, cell.b.y);
+      ctx.lineTo(cell.e.x, cell.e.y);
+      ctx.lineTo(cell.d.x, cell.d.y);
+      ctx.closePath();
+      ctx.fillStyle = terrainColorFor(hAvg, diff, sc, terr, sx, sz);
+      ctx.fill();
+      if (hAvg < wl) {
+        // water ripple quad pinned to the water level
+        const x0 = -extent + i * step, x1 = x0 + step;
+        const z0 = -extent + j * step, z1 = z0 + step;
+        const w0 = projectPoint({ x: x0, y: wl + 0.05, z: z0 });
+        const w1 = projectPoint({ x: x1, y: wl + 0.05, z: z0 });
+        const w2 = projectPoint({ x: x1, y: wl + 0.05, z: z1 });
+        const w3 = projectPoint({ x: x0, y: wl + 0.05, z: z1 });
+        if (w0 && w1 && w2 && w3) {
+          const ripple = 0.5 + 0.5 * Math.sin(sx * 1.4 + t * 1.6) * Math.sin(sz * 1.2 - t * 1.1);
+          const alpha = 0.50 + ripple * 0.16;
+          ctx.beginPath();
+          ctx.moveTo(w0.x, w0.y);
+          ctx.lineTo(w1.x, w1.y);
+          ctx.lineTo(w2.x, w2.y);
+          ctx.lineTo(w3.x, w3.y);
+          ctx.closePath();
+          ctx.fillStyle = "rgba(" + Math.round(water[0] * 255) + "," + Math.round(water[1] * 255) + "," + Math.round(water[2] * 255) + "," + alpha.toFixed(3) + ")";
+          ctx.fill();
+        }
+      }
+    }
+  }
 
-    const corner = projectPoint({ x: -19.5, y: 0.02, z: -19.5 });
+  function drawRoads() {
+    const cache = state.terrain;
+    if (!cache) return;
+    const ctx = state.ctx;
+    for (const road of cache.roads) {
+      // sample each segment so the road follows the terrain
+      const sampled = [];
+      for (let s = 0; s < road.length - 1; s++) {
+        const a = road[s], b = road[s + 1];
+        const dist = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        const steps = Math.max(1, Math.ceil(dist / 0.8));
+        for (let k = 0; k < steps; k++) {
+          const f = k / steps;
+          const x = lerp(a[0], b[0], f), z = lerp(a[1], b[1], f);
+          sampled.push({ x, y: heightAt(x, z) + 0.06, z });
+        }
+      }
+      sampled.push({ x: road[road.length - 1][0], y: heightAt(road[road.length - 1][0], road[road.length - 1][1]) + 0.06, z: road[road.length - 1][1] });
+      const projected = sampled.map((p) => projectPoint(p));
+      if (projected.length < 2) continue;
+      for (const pass of [0, 1]) {
+        ctx.beginPath();
+        let started = false;
+        for (const p of projected) {
+          if (!p) { started = false; continue; }
+          if (!started) { ctx.moveTo(p.x, p.y); started = true; }
+          else ctx.lineTo(p.x, p.y);
+        }
+        if (pass === 0) {
+          ctx.strokeStyle = "rgba(8, 16, 24, 0.55)";
+          ctx.lineWidth = 3.2;
+        } else {
+          ctx.strokeStyle = "rgba(190, 220, 235, 0.28)";
+          ctx.lineWidth = 1;
+          ctx.setLineDash([5, 7]);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+  }
+
+  function drawBuildingBox(b) {
+    const ctx = state.ctx;
+    const gh = heightAt(b.x, b.z);
+    const hw = b.w / 2, hd = b.d / 2;
+    const corners = [
+      [-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]
+    ];
+    const ground = corners.map(([ox, oz]) => projectPoint({ x: b.x + ox, y: heightAt(b.x + ox, b.z + oz) + 0.05, z: b.z + oz }));
+    const top = corners.map(([ox, oz]) => projectPoint({ x: b.x + ox, y: heightAt(b.x + ox, b.z + oz) + b.h, z: b.z + oz }));
+    if (ground.some((p) => !p) || top.some((p) => !p)) return;
+    const sideCol = b.type === "tower" ? "rgba(103,232,249,0.35)" : "rgba(120,150,175,0.55)";
+    const topCol = b.type === "tower" ? "rgba(103,232,249,0.22)" : "rgba(180,205,225,0.5)";
+    // sides 0-1 (back), 1-2 (right), 2-3 (front), 3-0 (left) sorted far-first by depth
+    const sides = [
+      [ground[0], ground[1], top[1], top[0]],
+      [ground[1], ground[2], top[2], top[1]],
+      [ground[2], ground[3], top[3], top[2]],
+      [ground[3], ground[0], top[0], top[3]]
+    ];
+    const sideDepths = sides.map((s) => (s[0].z + s[1].z + s[2].z + s[3].z) / 4);
+    const order = [0, 1, 2, 3].sort((p, q) => sideDepths[q] - sideDepths[p]);
+    for (const idx of order) {
+      const s = sides[idx];
+      ctx.beginPath();
+      ctx.moveTo(s[0].x, s[0].y);
+      ctx.lineTo(s[1].x, s[1].y);
+      ctx.lineTo(s[2].x, s[2].y);
+      ctx.lineTo(s[3].x, s[3].y);
+      ctx.closePath();
+      ctx.fillStyle = idx === 2 || idx === 3 ? sideCol : "rgba(60,80,100,0.5)";
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.moveTo(top[0].x, top[0].y);
+    for (let k = 1; k < 4; k++) ctx.lineTo(top[k].x, top[k].y);
+    ctx.closePath();
+    ctx.fillStyle = topCol;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(200,230,240,0.35)";
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    if (b.type === "tower") {
+      const apex = projectPoint({ x: b.x, y: gh + b.h + 0.9, z: b.z });
+      const mid = projectPoint({ x: b.x, y: gh + b.h, z: b.z });
+      if (apex && mid) {
+        ctx.strokeStyle = "rgba(103,232,249,0.8)";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(mid.x, mid.y);
+        ctx.lineTo(apex.x, apex.y);
+        ctx.stroke();
+      }
+    }
+  }
+
+  function drawBattleProps(t) {
+    const cache = state.terrain;
+    if (!cache) return;
+    const ctx = state.ctx;
+    const items = [];
+    for (const tree of cache.trees) {
+      const p = projectPoint({ x: tree.x, y: heightAt(tree.x, tree.z) + 0.02, z: tree.z });
+      if (p) items.push({ kind: "tree", z: p.z, ref: tree, p });
+    }
+    for (const rock of cache.rocks) {
+      const p = projectPoint({ x: rock.x, y: heightAt(rock.x, rock.z) + 0.02, z: rock.z });
+      if (p) items.push({ kind: "rock", z: p.z, ref: rock, p });
+    }
+    for (const b of cache.buildings) {
+      const p = projectPoint({ x: b.x, y: heightAt(b.x, b.z) + 0.02, z: b.z });
+      if (p) items.push({ kind: "bld", z: p.z, ref: b, p });
+    }
+    items.sort((a, b2) => b2.z - a.z);
+    for (const item of items) {
+      const p = item.p;
+      if (item.kind === "tree") {
+        const tree = item.ref;
+        const topH = tree.scale * 1.5;
+        const top = projectPoint({ x: tree.x, y: heightAt(tree.x, tree.z) + topH, z: tree.z });
+        if (!top) continue;
+        const halfW = clamp(p.scale * 0.34 * tree.scale, 1.2, 12);
+        // ground shadow
+        ctx.fillStyle = "rgba(0,0,0,0.25)";
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y, halfW * 1.15, halfW * 0.4, 0, 0, TAU);
+        ctx.fill();
+        // trunk
+        ctx.strokeStyle = "rgba(80,55,30,0.85)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x, p.y - (p.y - top.y) * 0.28);
+        ctx.stroke();
+        // canopy: two-tone cone
+        const light = "hsl(" + (tree.hue * 360).toFixed(0) + "," + (tree.sat * 100).toFixed(0) + "%," + (tree.light * 100).toFixed(0) + "%)";
+        const dark = "hsl(" + (tree.hue * 360).toFixed(0) + "," + (tree.sat * 100).toFixed(0) + "%," + (tree.light * 55).toFixed(0) + "%)";
+        ctx.beginPath();
+        ctx.moveTo(top.x, top.y);
+        ctx.lineTo(p.x - halfW, p.y);
+        ctx.lineTo(p.x + halfW, p.y);
+        ctx.closePath();
+        ctx.fillStyle = light;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(top.x, top.y);
+        ctx.lineTo(p.x, p.y);
+        ctx.lineTo(p.x + halfW, p.y);
+        ctx.closePath();
+        ctx.fillStyle = dark;
+        ctx.globalAlpha = 0.55;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      } else if (item.kind === "rock") {
+        const rock = item.ref;
+        const w = clamp(p.scale * 0.22 * rock.scale, 1, 7);
+        const h = w * 0.62;
+        const g = Math.round(120 + rock.shade * 110);
+        ctx.fillStyle = "rgb(" + g + "," + g + "," + (g + 6) + ")";
+        ctx.beginPath();
+        ctx.moveTo(p.x - w, p.y);
+        ctx.lineTo(p.x, p.y - h);
+        ctx.lineTo(p.x + w, p.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.14)";
+        ctx.beginPath();
+        ctx.moveTo(p.x - w * 0.3, p.y - h * 0.25);
+        ctx.lineTo(p.x, p.y - h);
+        ctx.lineTo(p.x + w * 0.35, p.y - h * 0.2);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        drawBuildingBox(item.ref);
+      }
+    }
+    // coordinator bases: hex pads + towers + cores (arena buildBases)
+    const bases = [
+      { x: 0, z: 0, r: 2.2, main: true },
+      { x: -6.2, z: -6.2, r: 1.6, main: false }
+    ];
+    for (const base of bases) {
+      const gh = heightAt(base.x, base.z);
+      const pts = [];
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * TAU + Math.PI / 6;
+        pts.push({ x: base.x + Math.cos(a) * base.r, y: gh + 0.06, z: base.z + Math.sin(a) * base.r });
+      }
+      ctx.beginPath();
+      polyline(pts, true);
+      ctx.fillStyle = "rgba(120,150,170,0.35)";
+      ctx.fill();
+      ctx.strokeStyle = base.main ? "rgba(34,211,238,0.6)" : "rgba(167,139,250,0.6)";
+      ctx.lineWidth = 1.1;
+      ctx.stroke();
+      const coreBase = projectPoint({ x: base.x, y: gh + 0.1, z: base.z });
+      const coreTop = projectPoint({ x: base.x, y: gh + 2.6, z: base.z });
+      if (coreBase && coreTop) {
+        ctx.strokeStyle = base.main ? "rgba(103,232,249,0.55)" : "rgba(196,181,253,0.55)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(coreBase.x, coreBase.y);
+        ctx.lineTo(coreTop.x, coreTop.y);
+        ctx.stroke();
+        const pulse = 0.5 + 0.5 * Math.sin(t * 1.8 + (base.main ? 0 : 2));
+        const R = clamp(coreBase.scale * 0.42, 4, 14) * (1 + pulse * 0.12);
+        ctx.save();
+        ctx.translate(coreTop.x, coreTop.y);
+        ctx.rotate(t * 0.8 + (base.main ? 0 : 1.2));
+        ctx.strokeStyle = base.main ? "rgba(103,232,249,0.95)" : "rgba(196,181,253,0.95)";
+        ctx.fillStyle = base.main ? "rgba(34,211,238,0.22)" : "rgba(167,139,250,0.22)";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(0, -R);
+        ctx.lineTo(R * 0.7, 0);
+        ctx.lineTo(0, R);
+        ctx.lineTo(-R * 0.7, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-R * 0.7, 0);
+        ctx.lineTo(R * 0.7, 0);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+
+  function drawMapGround(t) {
+    if (!state.terrain || state.terrain.mapId !== state.mapId) buildTerrain(state.mapId);
+    drawTerrainMesh(t);
+    drawRoads();
+    drawBattleProps(t);
+    // Night / blackout ambience over the opaque terrain (markers and drones
+    // draw later and stay bright, like the reference command view).
+    const sit = currentSituation();
+    if (sit.night) {
+      state.ctx.fillStyle = "rgba(3, 7, 18, 0.38)";
+      state.ctx.fillRect(0, 0, state.W, state.H);
+    } else if (sit.id === "blackout") {
+      state.ctx.fillStyle = "rgba(8, 4, 20, 0.22)";
+      state.ctx.fillRect(0, 0, state.W, state.H);
+    }
+    const map = currentMap();
+    const corner = projectPoint({ x: -19.5, y: heightAt(-19.5, -19.5) + 0.02, z: -19.5 });
     if (corner && state.layers.labels) {
+      const ctx = state.ctx;
       ctx.fillStyle = map.palette.edge;
       ctx.font = "8px 'JetBrains Mono', monospace";
       ctx.textAlign = "left";
@@ -2378,13 +2895,14 @@
     const now = performance.now() / 1000;
     const items = [];
     for (const f of state.features) {
-      const ground = projectPoint({ x: f.x, y: 0.03, z: f.z });
+      const gh = Math.max(heightAt(f.x, f.z), (state.terrain ? state.terrain.waterLevel : 0) * 0.9);
+      const ground = projectPoint({ x: f.x, y: gh + 0.05, z: f.z });
       if (!ground) continue;
-      items.push({ f, ground, z: ground.z });
+      items.push({ f, ground, z: ground.z, gh });
     }
     items.sort((a, b) => b.z - a.z);
 
-    for (const { f, ground } of items) {
+    for (const { f, ground, gh } of items) {
       const type = FEATURE_TYPES[f.type] || FEATURE_TYPES.hotspot;
       const live = f.liveState === "live";
       const stale = f.liveState === "stale";
@@ -2392,8 +2910,8 @@
       const pulse = 0.5 + 0.5 * Math.sin(t * 1.6 + f.phase);
 
       const ring = f.r * (1 + (live ? pulse * 0.025 : 0));
-      const pts = ellipsePoints(f.x, f.z, ring, ring, 44);
-      const projected = pts.map((p) => projectPoint({ x: p[0], y: 0.03, z: p[1] }));
+      const ptsForRing = ellipsePoints(f.x, f.z, ring, ring, 44);
+      const projected = ptsForRing.map((p) => projectPoint({ x: p[0], y: heightAt(p[0], p[1]) + 0.05, z: p[1] }));
       if (projected.every(Boolean)) {
         ctx.beginPath();
         ctx.moveTo(projected[0].x, projected[0].y);
@@ -2414,7 +2932,7 @@
         }
       }
 
-      const top = projectPoint({ x: f.x, y: 3.4 + (live ? pulse * 0.25 : 0), z: f.z });
+      const top = projectPoint({ x: f.x, y: gh + 5.0 + (live ? pulse * 0.3 : 0), z: f.z });
       if (!top) continue;
       const beacon = ctx.createLinearGradient(ground.x, ground.y, top.x, top.y);
       beacon.addColorStop(0, "rgba(" + type.rgba + ", " + (live ? 0.32 : 0.1) + ")");
@@ -2461,16 +2979,23 @@
   function drawGrid() {
     if (!state.layers.grid) return;
     const ctx = state.ctx;
-    const span = 26;
-    const step = 4;
+    const span = 19.5;
+    const step = 3.25;
     ctx.lineWidth = 1;
-    ctx.strokeStyle = "rgba(88, 160, 190, 0.1)";
-    ctx.beginPath();
-    for (let v = -span; v <= span; v += step) {
-      polyline([{ x: v, y: 0, z: -span }, { x: v, y: 0, z: span }], false);
-      polyline([{ x: -span, y: 0, z: v }, { x: span, y: 0, z: v }], false);
+    ctx.strokeStyle = "rgba(88, 160, 190, 0.12)";
+    for (let v = -span; v <= span + 0.001; v += step) {
+      // terrain-following grid lines (arena battlefield look)
+      let line = [];
+      for (let z = -span; z <= span + 0.001; z += 1.5) line.push({ x: v, y: heightAt(v, z) + 0.04, z });
+      ctx.beginPath();
+      polyline(line, false);
+      ctx.stroke();
+      line = [];
+      for (let x = -span; x <= span + 0.001; x += 1.5) line.push({ x, y: heightAt(x, v) + 0.04, z: v });
+      ctx.beginPath();
+      polyline(line, false);
+      ctx.stroke();
     }
-    ctx.stroke();
 
     ctx.strokeStyle = "rgba(34, 211, 238, 0.14)";
     ctx.lineWidth = 1;
@@ -2478,14 +3003,15 @@
       const pts = [];
       for (let i = 0; i <= 72; i++) {
         const a = (i / 72) * TAU;
-        pts.push({ x: Math.cos(a) * radius, y: 0.02, z: Math.sin(a) * radius });
+        const px = Math.cos(a) * radius, pz = Math.sin(a) * radius;
+        pts.push({ x: px, y: heightAt(px, pz) + 0.04, z: pz });
       }
       ctx.beginPath();
       polyline(pts, false);
       ctx.stroke();
     }
 
-    const origin = projectPoint({ x: 0, y: 0, z: 0 });
+    const origin = projectPoint({ x: 0, y: heightAt(0, 0) + 0.04, z: 0 });
     if (origin && state.layers.labels) {
       ctx.fillStyle = "rgba(85, 112, 132, 0.8)";
       ctx.font = "9px 'JetBrains Mono', monospace";
@@ -2542,7 +3068,8 @@
       const pts = [];
       for (let i = 0; i <= 48; i++) {
         const a = (i / 48) * TAU;
-        pts.push({ x: ZONE_POS.x + Math.cos(a) * ZONE_R, y: 0.08, z: ZONE_POS.z + Math.sin(a) * ZONE_R });
+        const px = ZONE_POS.x + Math.cos(a) * ZONE_R, pz = ZONE_POS.z + Math.sin(a) * ZONE_R;
+        pts.push({ x: px, y: heightAt(px, pz) + 0.08, z: pz });
       }
       ctx.beginPath();
       polyline(pts, true);
@@ -2553,8 +3080,9 @@
       ctx.setLineDash([4, 6]);
       ctx.stroke();
       ctx.setLineDash([]);
-      const c = projectPoint({ x: ZONE_POS.x, y: 0.1, z: ZONE_POS.z });
-      const top = projectPoint({ x: ZONE_POS.x, y: 2.6, z: ZONE_POS.z });
+      const zgh = heightAt(ZONE_POS.x, ZONE_POS.z);
+      const c = projectPoint({ x: ZONE_POS.x, y: zgh + 0.1, z: ZONE_POS.z });
+      const top = projectPoint({ x: ZONE_POS.x, y: zgh + 2.6, z: ZONE_POS.z });
       if (c && top) {
         const pulse = 0.5 + 0.5 * Math.sin(t * 2.2);
         ctx.strokeStyle = "rgba(251, 191, 36, " + (0.15 + pulse * 0.2) + ")";
@@ -2579,7 +3107,7 @@
   function drawBeam() {
     if (!state.main.active) return;
     const ctx = state.ctx;
-    const a = projectPoint({ x: 0, y: 0.1, z: 0 });
+    const a = projectPoint({ x: 0, y: heightAt(0, 0) + 0.1, z: 0 });
     const b = projectPoint(MAIN_POS);
     if (!a || !b) return;
     const g = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
@@ -2596,7 +3124,8 @@
     const pts = [];
     for (let i = 0; i <= 40; i++) {
       const ang = (i / 40) * TAU;
-      pts.push({ x: Math.cos(ang) * 2.7, y: 0.06, z: Math.sin(ang) * 2.7 });
+      const px = Math.cos(ang) * 2.7, pz = Math.sin(ang) * 2.7;
+      pts.push({ x: px, y: heightAt(px, pz) + 0.06, z: pz });
     }
     ctx.beginPath();
     polyline(pts, true);
@@ -2613,7 +3142,8 @@
       const pts = [];
       for (let i = 0; i <= 28; i++) {
         const a = (i / 28) * TAU;
-        pts.push({ x: d.pos.x + Math.cos(a) * 3.4, y: 0.05, z: d.pos.z + Math.sin(a) * 3.4 });
+        const px = d.pos.x + Math.cos(a) * 3.4, pz = d.pos.z + Math.sin(a) * 3.4;
+        pts.push({ x: px, y: heightAt(px, pz) + 0.05, z: pz });
       }
       ctx.beginPath();
       polyline(pts, true);
