@@ -38,18 +38,8 @@ jobs:
           fi
           echo "no external runtime URLs"
 
-      - name: Static site smoke (no server needed)
-        shell: bash
-        run: |
-          set -e
-          python3 - <<'PY'
-          from pathlib import Path
-          html = Path("index.html").read_text(encoding="utf-8")
-          assert "<title>" in html and "NEXUS AI" in html
-          for token in ["ops-canvas-3d", "map-options", "situation-options", "feature-chips", "assets/vendor/three.min.js", "assets/app.js"]:
-            assert token in html, f"missing {token}"
-          js = Path("assets/app.js").read_text(encoding="utf-8")
-          for token in ["SITUATIONS", "MAPS", "wind", "rain", "compass", "threeAvailable"]:
-            assert token in js, f"missing {token}"
-          print("smoke ok")
-          PY
+      - name: Wiring and simulation tests
+        run: npm test
+
+      - name: JavaScript syntax check
+        run: npm run check

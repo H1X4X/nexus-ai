@@ -3089,6 +3089,84 @@ kbd {
 }
 
 /* ============================================================
+   v2 additions — telemetry, view controls, focus mode
+   ============================================================ */
+
+.ops-panel-head h3 .icon {
+  width: 13px;
+  height: 13px;
+  margin-right: 6px;
+  color: var(--cyan);
+  vertical-align: -2px;
+}
+.telemetry-panel .ops-panel-head { margin-bottom: 8px; }
+.metrics-chart {
+  display: block;
+  width: 100%;
+  height: 86px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(4, 12, 20, 0.55);
+}
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 8px;
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.04em;
+}
+.chart-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; }
+.legend-dot.connected { background: var(--cyan); }
+.legend-dot.buffered { background: var(--amber); }
+.legend-dot.packets { background: var(--violet); }
+
+.speed-control button[data-speed="0.5"] { min-width: 42px; }
+#sim-focus[aria-pressed="true"] {
+  border-color: rgba(34, 211, 238, 0.5);
+  background: rgba(34, 211, 238, 0.12);
+  color: var(--cyan-2);
+}
+#sim-step[aria-pressed="true"] { border-color: rgba(251, 191, 36, 0.4); color: var(--amber); }
+
+/* Focus mode: hide the essay, expand the live simulator. */
+body.focus-mode .site-header,
+body.focus-mode .site-footer,
+body.focus-mode .final-cta,
+body.focus-mode .section:not(.section-ops),
+body.focus-mode .section-ops .section-head,
+body.focus-mode .scenario-bar,
+body.focus-mode .run-bar,
+body.focus-mode .scenario-notes,
+body.focus-mode .sim-shortcuts { display: none !important; }
+body.focus-mode .section-ops { min-height: 100vh; padding-top: 18px; padding-bottom: 24px; }
+body.focus-mode .ops-shell { max-width: none; border-radius: 14px; }
+body.focus-mode .ops-grid { grid-template-columns: minmax(0, 1fr); }
+body.focus-mode .ops-left,
+body.focus-mode .ops-right { display: none; }
+body.focus-mode .ops-topbar { position: sticky; top: 0; z-index: 5; }
+body.focus-mode .canvas-wrap { height: calc(100vh - 260px); min-height: 420px; }
+
+@media (max-width: 1080px) {
+  body.focus-mode .canvas-wrap { height: calc(100vh - 240px); }
+}
+@media (max-width: 720px) {
+  .ops-actions .tool-button { min-width: 34px; justify-content: center; }
+  .scenario-chip { flex: 1 1 auto; }
+  .fault-panel .fault-button { min-height: 42px; }
+  .metrics-chart { height: 76px; }
+  body.focus-mode .canvas-wrap { height: calc(100vh - 300px); min-height: 340px; }
+}
+@media (max-width: 480px) {
+  .ops-title { width: 100%; }
+  .ops-actions { justify-content: flex-start; }
+  .speed-control button { min-width: 28px; }
+}
+
+/* ============================================================
    Print
    ============================================================ */
 

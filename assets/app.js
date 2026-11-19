@@ -116,6 +116,11 @@
       id: "drone",
       label: "Lose a drone",
       toast: "Scenario: D07 lost. Its last observation is retained as stale."
+    },
+    blackout: {
+      id: "blackout",
+      label: "Comms blackout",
+      toast: "Scenario: interference, storm partition and a lost drone. Watch the telemetry dip."
     }
   };
 
@@ -730,6 +735,10 @@
     drillTimers: [],
     log: [],
     stats: { packets: 0, failovers: 0, reconciliations: 0 },
+    history: [],
+    historyAcc: 0,
+    historyPackets: 0,
+    focus: false,
     uiClock: 0,
     view: "command",
     layers: {
@@ -1147,7 +1156,11 @@
     simClock: $("#sim-clock"),
     simState: $("#sim-state"),
     simPause: $("#sim-pause"),
+    simStep: $("#sim-step"),
     simReset: $("#sim-reset"),
+    simFocus: $("#sim-focus"),
+    metricsChart: $("#metrics-chart"),
+    runSnapshot: $("#run-snapshot"),
     fleetList: $("#fleet-list"),
     fleetCount: $("#fleet-count"),
     coordStatus: $("#coord-status"),
@@ -1779,6 +1792,14 @@
       computeNetwork();
       failDrone("D07", true);
       setView("command", true);
+    } else if (name === "blackout") {
+      computeNetwork();
+      toggleInterference();
+      toggleStorm();
+      severLink();
+      failDrone("D05", true);
+      setView("command", true);
+      logEvent("Scenario · comms blackout — interference, partition and D05 lost", "bad");
     }
   }
 
@@ -1844,6 +1865,9 @@
     state.view = "command";
     state.recall = false;
     state.stats = { packets: 0, failovers: 0, reconciliations: 0 };
+    state.history = [];
+    state.historyAcc = 0;
+    state.historyPackets = 0;
     state.highlightFeature = null;
     state.highlightUntil = 0;
     clearFaults();
@@ -1873,6 +1897,7 @@
       "ok"
     );
     updateUI(true);
+    drawTelemetryChart();
     updateRunMeta();
     syncURL();
     if (!opts.silent) {
@@ -2073,7 +2098,8 @@
       const running =
         (s === "mesh" && state.storm) ||
         (s === "main" && !state.main.active) ||
-        (s === "drone" && state.failedDrones.length > 0);
+        (s === "drone" && state.failedDrones.length > 0) ||
+        (s === "blackout" && state.interference && state.storm);
       chip.classList.toggle("is-running", running);
     });
 
@@ -2097,6 +2123,7 @@
         b.disabled = false;
       });
     }
+    drawTelemetryChart();
   }
 
   function updatePauseButton() {
@@ -2210,7 +2237,7 @@
     return {
       app: "NEXUS AI",
       kind: "simulation-run",
-      version: "1.0.0",
+      version: "2.0.0",
       generatedAt: new Date().toISOString(),
       seed: state.seed,
       scenario: state.scenario
@@ -2280,6 +2307,16 @@
         packetsSpawned: state.stats.packets,
         failovers: state.stats.failovers,
         reconciliations: state.stats.reconciliations
+      },
+      telemetry: {
+        intervalSeconds: 0.5,
+        samples: state.history.map((s) => ({
+          atSeconds: Math.round(s.t * 10) / 10,
+          connected: s.connected,
+          buffered: s.buffered,
+          packetsPerSecond: s.packetRate,
+          localGroups: s.groups
+        }))
       },
       events: state.log.slice(-200).map((e) => ({
         atSeconds: e.at,
@@ -2369,6 +2406,99 @@
     const csv = rows.map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
     downloadText(runFileName("csv"), "text/csv", csv);
     toast("Run exported as CSV — seed " + state.seed + ".", "ok");
+  }
+
+  /* ---------------- PNG snapshot & view controls ---------------- */
+
+  function downloadBlob(name, blob) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function exportSnapshot() {
+    const use3d = state.view === "command" && threeAvailable();
+    const base = use3d ? state.canvas3d : state.canvas;
+    if (!base || !base.width || !base.height) return;
+    try {
+      // Draw first so paused or throttled canvases are captured in sync.
+      render(performance.now() / 1000);
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const header = Math.round(72 * dpr);
+      const out = document.createElement("canvas");
+      out.width = base.width;
+      out.height = base.height + header;
+      const ctx = out.getContext("2d");
+      if (!ctx) return;
+      ctx.fillStyle = "#050b13";
+      ctx.fillRect(0, 0, out.width, out.height);
+      ctx.drawImage(base, 0, header, base.width, base.height);
+      // In 3D mode the HUD is a transparent 2D canvas layered on top.
+      if (use3d && state.canvas && state.canvas !== base) {
+        ctx.drawImage(state.canvas, 0, header, state.canvas.width, state.canvas.height);
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const w = base.width / dpr;
+      ctx.fillStyle = "#22d3ee";
+      ctx.font = "700 14px 'Space Grotesk', sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText("NEXUS AI", 18, 28);
+      ctx.fillStyle = "#7c98ac";
+      ctx.font = "500 11px 'JetBrains Mono', monospace";
+      ctx.fillText("LIVE OPS · " + currentMap().label.toUpperCase(), 18, 48);
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#e8f3fa";
+      ctx.fillText("seed " + state.seed + " · " + fmtClock(state.time), w - 18, 28);
+      ctx.fillStyle = "#7c98ac";
+      ctx.fillText(scenarioLabel() + " · " + opsState().label, w - 18, 48);
+      ctx.strokeStyle = "rgba(34, 211, 238, 0.35)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, header - 0.5);
+      ctx.lineTo(w, header - 0.5);
+      ctx.stroke();
+      out.toBlob((blob) => {
+        if (!blob) return;
+        downloadBlob(runFileName("png"), blob);
+        toast("Snapshot saved as PNG — " + fmtClock(state.time) + ".", "ok");
+      }, "image/png");
+    } catch (e) {
+      toast("Snapshot could not be created in this browser.", "warn");
+    }
+  }
+
+  function stepSimulation() {
+    if (!state.paused) {
+      state.paused = true;
+      updatePauseButton();
+    }
+    updateSim(1 / 30);
+    render(performance.now() / 1000);
+    updateUI(true);
+  }
+
+  function toggleFocus() {
+    state.focus = !state.focus;
+    document.body.classList.toggle("focus-mode", state.focus);
+    if (el.simFocus) {
+      el.simFocus.setAttribute("aria-pressed", String(state.focus));
+      const label = el.simFocus.querySelector("span");
+      if (label) label.textContent = state.focus ? "Exit focus" : "Focus";
+      el.simFocus.title = state.focus ? "Exit focus mode (F)" : "Focus mode — hide the proposal and expand the simulator (F)";
+    }
+    if (state.focus) scrollToSim();
+    const reflow = () => {
+      resizeCanvas();
+      resizeThree();
+      drawTelemetryChart();
+    };
+    requestAnimationFrame(reflow);
+    setTimeout(reflow, 320);
   }
 
   function rerollSeed() {
@@ -2492,11 +2622,111 @@
       if (state.time - p.born > p.dur) state.packets.splice(i, 1);
     }
 
+    sampleTelemetry(dt);
+
     state.uiClock += dt;
     if (state.uiClock >= 0.16) {
       state.uiClock = 0;
       updateUI(false);
     }
+  }
+
+  /* ---------------- telemetry history ----------------
+     A small ring buffer powers the sparkline panel. It records one
+     sample every 0.5 simulated seconds and keeps the last 120 samples
+     (60 simulated seconds at 1x), independent of frame rate. */
+  function sampleTelemetry(dt) {
+    state.historyAcc += dt;
+    if (state.historyAcc < 0.5) return;
+    const elapsed = state.historyAcc;
+    state.historyAcc = 0;
+    const sent = state.stats.packets - state.historyPackets;
+    state.historyPackets = state.stats.packets;
+    state.history.push({
+      t: state.time,
+      connected: state.connectedCount,
+      buffered: Math.round(state.buffered),
+      packetRate: Math.round((sent / elapsed) * 10) / 10,
+      groups: state.groups.length
+    });
+    if (state.history.length > 120) state.history.shift();
+  }
+
+  function drawTelemetryChart() {
+    const canvas = el.metricsChart;
+    if (!canvas) return;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (!w || !h) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const pw = Math.round(w * dpr);
+    const ph = Math.round(h * dpr);
+    if (canvas.width !== pw || canvas.height !== ph) {
+      canvas.width = pw;
+      canvas.height = ph;
+    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    const pad = { l: 4, r: 4, t: 8, b: 12 };
+    const iw = w - pad.l - pad.r;
+    const ih = h - pad.t - pad.b;
+    ctx.strokeStyle = "rgba(120, 190, 220, 0.12)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 3; i++) {
+      const y = Math.round(pad.t + (ih / 3) * i) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(pad.l, y);
+      ctx.lineTo(pad.l + iw, y);
+      ctx.stroke();
+    }
+
+    const samples = state.history;
+    if (samples.length < 2) {
+      ctx.fillStyle = C.faint;
+      ctx.font = "500 10px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("collecting telemetry…", w / 2, h / 2 + 3);
+      return;
+    }
+
+    const maxBuffered = Math.max(12, ...samples.map((s) => s.buffered));
+    const maxRate = Math.max(4, ...samples.map((s) => s.packetRate));
+    const series = [
+      { key: "connected", color: C.cyan, max: CFG.count },
+      { key: "buffered", color: C.amber, max: maxBuffered },
+      { key: "packetRate", color: C.violet, max: maxRate }
+    ];
+    const xAt = (i) => pad.l + (i / (samples.length - 1)) * iw;
+
+    for (const s of series) {
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      samples.forEach((sample, i) => {
+        const v = clamp(sample[s.key] / s.max, 0, 1);
+        const x = xAt(i);
+        const y = pad.t + ih - v * ih;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      const last = samples[samples.length - 1][s.key];
+      const ly = pad.t + ih - clamp(last / s.max, 0, 1) * ih;
+      ctx.fillStyle = s.color;
+      ctx.beginPath();
+      ctx.arc(pad.l + iw, ly, 2.3, 0, TAU);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = C.faint;
+    ctx.font = "500 9px 'JetBrains Mono', monospace";
+    ctx.textAlign = "left";
+    ctx.fillText("−60s", pad.l, h - 2);
+    ctx.textAlign = "right";
+    ctx.fillText("now", pad.l + iw, h - 2);
   }
 
   function spawnPacket() {
@@ -3161,7 +3391,13 @@
     const canvas = state.canvas3d;
     if (!canvas || typeof THREE === "undefined") return;
     try {
-      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+      const renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: true,
+        powerPreference: "high-performance",
+        // Required so PNG snapshots can read the WebGL drawing buffer.
+        preserveDrawingBuffer: true
+      });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0x050b13);
@@ -5370,6 +5606,9 @@
     if (el.runCopy) el.runCopy.addEventListener("click", copyRunLink);
     if (el.runExport) el.runExport.addEventListener("click", exportRunJSON);
     if (el.runCsv) el.runCsv.addEventListener("click", exportRunCSV);
+    if (el.runSnapshot) el.runSnapshot.addEventListener("click", exportSnapshot);
+    if (el.simStep) el.simStep.addEventListener("click", stepSimulation);
+    if (el.simFocus) el.simFocus.addEventListener("click", toggleFocus);
     if (el.runDrill) el.runDrill.addEventListener("click", runDrill);
     updatePauseButton();
     updateSpeedButtons();
@@ -5442,6 +5681,12 @@
         togglePause();
       } else if (e.key === "r" || e.key === "R") {
         resetSim();
+      } else if (e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        toggleFocus();
+      } else if (e.key === "." || e.key === ">") {
+        e.preventDefault();
+        stepSimulation();
       } else if (e.key === "1" || e.key === "2" || e.key === "3" || e.key === "4") {
         const names = ["overview", "top", "front", "orbit"];
         setCamera(names[Number(e.key) - 1]);
@@ -5526,6 +5771,7 @@
     updatePauseButton();
     updateSpeedButtons();
     updateUI(true);
+    drawTelemetryChart();
     updateRunMeta();
     syncURL();
     logEvent(
