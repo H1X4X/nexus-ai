@@ -4326,83 +4326,7 @@
         gridGroup.add(new THREE.Line(rg, new THREE.LineBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.14 })));
       }
     }
-    // --- coordinator bases ---
-    const baseGroup = new THREE.Group();
-    env.add(baseGroup);
-    const baseCores = [];
-    T.glowTex = T.glowTex || makeGlowTexture();
-    for (const base of [{ x: 0, z: 0, r: 2.2, main: true }, { x: -6.2, z: -6.2, r: 1.6, main: false }]) {
-      const gh = heightAt(base.x, base.z);
-      const accent = base.main ? 0x22d3ee : 0xa78bfa;
-      const g = new THREE.Group();
-      g.position.set(base.x, gh, base.z);
-      baseGroup.add(g);
-      const plat = new THREE.Mesh(new THREE.CylinderGeometry(base.r, base.r * 1.06, 0.18, 6),
-        new THREE.MeshStandardMaterial({ map: T.tex.concrete, color: 0x667b88, roughness: 0.86 }));
-      plat.position.y = 0.09;
-      plat.castShadow = true;
-      g.add(plat);
-      const deck = new THREE.Mesh(new THREE.CylinderGeometry(base.r * 0.72, base.r * 0.72, 0.1, 6),
-        new THREE.MeshStandardMaterial({ map: T.tex.metal, color: 0x4a5f6b, roughness: 0.6, metalness: 0.3 }));
-      deck.position.y = 0.21;
-      g.add(deck);
-      g.add(new THREE.LineLoop(
-        new THREE.BufferGeometry().setFromPoints(Array.from({ length: 6 }, (_, k) => {
-          const a = (k / 6) * TAU + Math.PI / 6;
-          return new THREE.Vector3(Math.cos(a) * base.r, 0.2, Math.sin(a) * base.r);
-        })),
-        new THREE.LineBasicMaterial({ color: accent, transparent: true, opacity: 0.75 })
-      ));
-      const spinRing = new THREE.Mesh(new THREE.TorusGeometry(base.r * 0.56, 0.035, 4, 24),
-        new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.65 }));
-      spinRing.rotation.x = Math.PI / 2;
-      spinRing.position.y = 0.3;
-      g.add(spinRing);
-      for (let k = 0; k < 6; k++) {
-        const a = (k / 6) * TAU;
-        const pylon = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.4, 0.12),
-          new THREE.MeshLambertMaterial({ color: 0x8aa8b8 }));
-        pylon.position.set(Math.cos(a) * base.r * 0.78, 0.42, Math.sin(a) * base.r * 0.78);
-        pylon.castShadow = true;
-        g.add(pylon);
-      }
-      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.12, 2.3, 6),
-        new THREE.MeshStandardMaterial({ map: T.tex.metal, color: 0x5a7382, roughness: 0.55, metalness: 0.35 }));
-      mast.position.y = 1.35;
-      mast.castShadow = true;
-      g.add(mast);
-      for (const yy of [0.9, 1.6, 2.1]) {
-        const band = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.025, 4, 12),
-          new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.55 }));
-        band.rotation.x = Math.PI / 2;
-        band.position.y = yy;
-        g.add(band);
-      }
-      const dish = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.2, 14, 1, true),
-        new THREE.MeshStandardMaterial({ map: T.tex.metal, color: 0xa8bcc8, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.35 }));
-      dish.position.set(0, 2.55, 0.1);
-      dish.rotation.x = -0.65;
-      g.add(dish);
-      const coreMat = new THREE.MeshBasicMaterial({ color: accent });
-      const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.42), coreMat);
-      core.position.y = 2.9;
-      g.add(core);
-      const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(0.62, 0),
-        new THREE.MeshBasicMaterial({ color: accent, wireframe: true, transparent: true, opacity: 0.35 }));
-      shell.position.y = 2.9;
-      g.add(shell);
-      const glow = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: T.glowTex, color: accent, transparent: true, opacity: 0.55, depthWrite: false
-      }));
-      glow.scale.set(2.4, 2.4, 1);
-      glow.position.y = 2.9;
-      g.add(glow);
-      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.16, 2.6, 8, 1, true),
-        new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide }));
-      beam.position.y = 1.45;
-      g.add(beam);
-      baseCores.push({ core, shell, spinRing, dish, glow, main: base.main });
-    }
+    // The coordinators are airborne command drones now, built with the fleet below.
     // --- feature truth + markers ---
     const featureGroup = new THREE.Group();
     env.add(featureGroup);
@@ -4490,10 +4414,12 @@
       featureGroup.add(marker);
       featureViews.push({ f, truth, marker, ringMat, ring, beamMat, diaMat, dia, label, hex, type });
     }
-    // --- drones: believable quadcopters with carbon arms, motors, rotors and cameras ---
+    // --- aircraft: one builder for the sensor fleet and the two command drones ---
     const droneViews = [];
+    const coordViews = [];
     const droneGroup = new THREE.Group();
-    env.add(droneGroup);
+    const scanGroup = new THREE.Group();
+    env.add(droneGroup, scanGroup);
     const hitList = [];
     const carbonMat = std({ map: T.tex.metal, color: 0x27323a, roughness: 0.58, metalness: 0.45 });
     const motorMat = std({ map: T.tex.metal, color: 0x8397a4, roughness: 0.45, metalness: 0.6 });
@@ -4509,109 +4435,175 @@
       map: T.tex.rotor, transparent: true, opacity: 0.34, side: THREE.DoubleSide, depthWrite: false
     });
     const skidMat = std({ map: T.tex.metal, color: 0x556670, roughness: 0.6, metalness: 0.5 });
-    for (const d of state.drones) {
+
+    function makeAirframe(scale, armCount, accent, heavy) {
       const grp = new THREE.Group();
-      const bodyMat = std({ color: 0xb8c9d2, roughness: 0.42, metalness: 0.35, emissive: 0x0a4a5a, emissiveIntensity: 0.55 });
-      const shell = new THREE.Mesh(new THREE.SphereGeometry(0.34, 16, 12), bodyMat);
-      shell.scale.set(1.12, 0.46, 0.92);
+      const bodyMat = std({
+        color: heavy ? 0x9aabb5 : 0xb8c9d2, roughness: 0.42, metalness: 0.35,
+        emissive: 0x0a4a5a, emissiveIntensity: heavy ? 0.32 : 0.55
+      });
+      const statusMat = new THREE.MeshBasicMaterial({ color: accent });
+      const shell = new THREE.Mesh(new THREE.SphereGeometry(heavy ? 0.4 : 0.34, heavy ? 20 : 16, heavy ? 14 : 12), bodyMat);
+      shell.scale.set(heavy ? 1.14 : 1.12, heavy ? 0.42 : 0.46, heavy ? 1.1 : 0.92);
       shell.castShadow = true;
       grp.add(shell);
-      const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.27, 14, 10), canopyMat);
-      canopy.scale.set(1, 0.52, 0.85);
-      canopy.position.set(0, 0.075, -0.02);
+      const canopy = new THREE.Mesh(new THREE.SphereGeometry(heavy ? 0.3 : 0.27, 14, 10), canopyMat);
+      canopy.scale.set(heavy ? 1.04 : 1, heavy ? 0.46 : 0.52, heavy ? 1.02 : 0.85);
+      canopy.position.set(0, heavy ? 0.085 : 0.075, heavy ? -0.08 : -0.02);
       grp.add(canopy);
-      // nose camera on a small gimbal
-      const gimbal = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), carbonMat);
-      gimbal.position.set(0, -0.16, 0.26);
+      // gimballed camera under the nose
+      const gimbalY = heavy ? -0.21 : -0.16;
+      const gimbalZ = heavy ? 0.38 : 0.26;
+      const gimbal = new THREE.Mesh(new THREE.SphereGeometry(heavy ? 0.17 : 0.11, 10, 8), carbonMat);
+      gimbal.position.set(0, gimbalY, gimbalZ);
       grp.add(gimbal);
-      const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.072, 0.072, 0.055, 12), lensMat);
+      const lens = new THREE.Mesh(new THREE.CylinderGeometry(heavy ? 0.11 : 0.072, heavy ? 0.11 : 0.072, heavy ? 0.08 : 0.055, 12), lensMat);
       lens.rotation.x = Math.PI / 2;
-      lens.position.set(0, -0.16, 0.35);
+      lens.position.set(0, gimbalY, gimbalZ + (heavy ? 0.15 : 0.09));
       grp.add(lens);
-      const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.018, 0.3, 6), carbonMat);
-      antenna.position.set(0, 0.2, -0.2);
+      const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.018, heavy ? 0.44 : 0.3, 6), carbonMat);
+      antenna.position.set(0, heavy ? 0.26 : 0.2, heavy ? -0.28 : -0.2);
       antenna.rotation.x = -0.24;
       grp.add(antenna);
+      if (heavy) {
+        // larger command quadcopters carry a flat avionics deck and tool pods
+        const deck = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.1, 0.66), motorMat);
+        deck.position.y = 0.19;
+        deck.castShadow = true;
+        grp.add(deck);
+        for (const sx of [-0.46, 0.46]) {
+          const pod = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.18, 0.48), carbonMat);
+          pod.position.set(sx, -0.04, -0.08);
+          pod.castShadow = true;
+          grp.add(pod);
+          const strip = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.03, 0.36), statusMat);
+          strip.position.set(sx + Math.sign(sx) * 0.12, 0.04, -0.08);
+          grp.add(strip);
+        }
+        const whip = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.012, 0.32, 5), carbonMat);
+        whip.position.set(0, 0.29, -0.32);
+        grp.add(whip);
+      }
       // landing skids
-      for (const sx of [-0.22, 0.22]) {
-        const skid = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.04, 0.56), skidMat);
-        skid.position.set(sx, -0.24, 0);
+      const skidX = heavy ? 0.42 : 0.22;
+      for (const sx of [-skidX, skidX]) {
+        const skid = new THREE.Mesh(new THREE.BoxGeometry(heavy ? 0.07 : 0.045, 0.04, heavy ? 0.82 : 0.56), skidMat);
+        skid.position.set(sx, heavy ? -0.3 : -0.24, 0);
         grp.add(skid);
-        for (const sz of [-0.17, 0.17]) {
-          const strut = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.18, 0.035), skidMat);
-          strut.position.set(sx, -0.15, sz);
+        for (const sz of heavy ? [-0.26, 0.26] : [-0.17, 0.17]) {
+          const strut = new THREE.Mesh(new THREE.BoxGeometry(0.035, heavy ? 0.24 : 0.18, 0.035), skidMat);
+          strut.position.set(sx, heavy ? -0.19 : -0.15, sz);
           strut.rotation.z = sx > 0 ? 0.2 : -0.2;
           grp.add(strut);
         }
       }
-      const statusMat = new THREE.MeshBasicMaterial({ color: 0x22d3ee });
+      const armReach = heavy ? 0.85 : 0.7;
       const rotors = [], blurs = [];
-      for (const angle of [Math.PI / 4, 3 * Math.PI / 4, 5 * Math.PI / 4, 7 * Math.PI / 4]) {
+      for (let k = 0; k < armCount; k++) {
         const arm = new THREE.Group();
-        arm.rotation.y = angle;
+        arm.rotation.y = (k / armCount) * TAU + (armCount === 4 ? Math.PI / 4 : Math.PI / armCount);
         grp.add(arm);
-        const spar = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.055, 0.085), carbonMat);
-        spar.position.set(0.39, 0, 0);
+        const spar = new THREE.Mesh(new THREE.BoxGeometry(armReach * 0.94, heavy ? 0.075 : 0.055, heavy ? 0.11 : 0.085), carbonMat);
+        spar.position.set(armReach * 0.54, 0, 0);
         spar.castShadow = true;
         arm.add(spar);
-        const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.095, 0.13, 12), motorMat);
-        motor.position.set(0.7, 0.045, 0);
+        const motor = new THREE.Mesh(new THREE.CylinderGeometry(heavy ? 0.12 : 0.085, heavy ? 0.13 : 0.095, heavy ? 0.18 : 0.13, 12), motorMat);
+        motor.position.set(armReach, heavy ? 0.06 : 0.045, 0);
         motor.castShadow = true;
         arm.add(motor);
         const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.05, 10), carbonMat);
-        hub.position.set(0.7, 0.13, 0);
+        hub.position.set(armReach, heavy ? 0.17 : 0.13, 0);
         arm.add(hub);
+        const dir = k % 2 ? -1 : 1;
         for (const bladeAngle of [0, Math.PI / 2]) {
-          const blade = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.012, 0.06), bladeMat);
-          blade.position.set(0.7, 0.155, 0);
+          const blade = new THREE.Mesh(new THREE.BoxGeometry(heavy ? 0.78 : 0.68, 0.012, heavy ? 0.07 : 0.06), bladeMat);
+          blade.position.set(armReach, heavy ? 0.195 : 0.155, 0);
           blade.rotation.y = bladeAngle;
           blade.rotation.x = 0.06;
           arm.add(blade);
-          rotors.push(blade);
+          rotors.push({ mesh: blade, dir });
         }
-        const blur = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 0.78), blurMat);
+        const blur = new THREE.Mesh(new THREE.PlaneGeometry(heavy ? 1.04 : 0.78, heavy ? 1.04 : 0.78), blurMat);
         blur.rotation.x = -Math.PI / 2;
-        blur.position.set(0.7, 0.17, 0);
+        blur.position.set(armReach, heavy ? 0.21 : 0.17, 0);
         arm.add(blur);
-        blurs.push(blur);
-        const led = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 6), statusMat);
-        led.position.set(0.82, 0.02, 0);
+        blurs.push({ mesh: blur, dir });
+        const led = new THREE.Mesh(new THREE.SphereGeometry(heavy ? 0.045 : 0.038, 8, 6), statusMat);
+        led.position.set(armReach + (heavy ? 0.13 : 0.12), 0.02, 0);
         arm.add(led);
       }
       const glow = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: T.glowTex, color: 0x22d3ee, transparent: true, opacity: 0.55, depthWrite: false
+        map: T.glowTex, color: accent, transparent: true, opacity: 0.5, depthWrite: false
       }));
-      glow.scale.set(1.1, 1.1, 1);
+      glow.scale.set(heavy ? 1.3 : 1.1, heavy ? 1.3 : 1.1, 1);
       grp.add(glow);
-      const ring = new THREE.Mesh(new THREE.RingGeometry(0.62, 0.7, 28),
+      const ring = new THREE.Mesh(new THREE.RingGeometry(heavy ? 0.75 : 0.62, heavy ? 0.86 : 0.7, 32),
         new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false }));
       ring.rotation.x = -Math.PI / 2;
-      ring.position.y = -0.32;
+      ring.position.y = heavy ? -0.35 : -0.32;
       grp.add(ring);
-      const hit = new THREE.Mesh(new THREE.SphereGeometry(1.15, 8, 6), new THREE.MeshBasicMaterial({ visible: false }));
-      hit.userData.droneId = d.id;
-      grp.add(hit);
-      droneGroup.add(grp);
-      hitList.push(hit);
-      droneViews.push({ d, grp, bodyMat, statusMat, glow, ring, hit, rotors, blurs, bankX: 0, bankZ: 0, prevX: d.pos.x, prevZ: d.pos.z });
+      const hit = new THREE.Mesh(new THREE.SphereGeometry(heavy ? 1.45 : 1.15, 8, 6),
+        new THREE.MeshBasicMaterial({ visible: false }));
+      grp.scale.setScalar(scale);
+      return { grp, bodyMat, statusMat, glow, ring, hit, rotors, blurs };
     }
-    const coordViews = [];
-    for (const [id, posZ, colHex] of [["MAIN", MAIN_POS, 0x22d3ee], ["BKUP", BKUP_POS, 0xa78bfa]]) {
-      const grp = new THREE.Group();
-      const coreMat = new THREE.MeshBasicMaterial({ color: colHex });
-      const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.75), coreMat);
-      grp.add(core);
-      const halo = new THREE.Mesh(new THREE.RingGeometry(1.0, 1.15, 36), new THREE.MeshBasicMaterial({ color: colHex, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false }));
+
+    // --- sensor sweep: each small drone projects a rotating scan cone to the ground ---
+    const scanConeGeo = new THREE.ConeGeometry(1, 1, 24, 1, true);
+    scanConeGeo.translate(0, -0.5, 0);
+    const scanFootGeo = new THREE.RingGeometry(0.9, 1, 32);
+    const scanLineGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.9, -1, 0)
+    ]);
+    for (const d of state.drones) {
+      const air = makeAirframe(1, 4, 0x22d3ee, false);
+      air.hit.userData.droneId = d.id;
+      droneGroup.add(air.grp);
+      hitList.push(air.hit);
+      const cone = new THREE.Mesh(scanConeGeo, new THREE.MeshBasicMaterial({
+        color: 0x67e8f9, transparent: true, opacity: 0.055, side: THREE.DoubleSide, depthWrite: false
+      }));
+      cone.frustumCulled = false;
+      const foot = new THREE.Mesh(scanFootGeo, new THREE.MeshBasicMaterial({
+        color: 0x67e8f9, transparent: true, opacity: 0.24, side: THREE.DoubleSide, depthWrite: false
+      }));
+      foot.rotation.x = -Math.PI / 2;
+      const sweep = new THREE.Line(scanLineGeo, new THREE.LineBasicMaterial({
+        color: 0xa5f3fc, transparent: true, opacity: 0.5, depthWrite: false
+      }));
+      scanGroup.add(cone, foot, sweep);
+      droneViews.push({
+        d, grp: air.grp, bodyMat: air.bodyMat, statusMat: air.statusMat, glow: air.glow,
+        ring: air.ring, hit: air.hit, rotors: air.rotors, blurs: air.blurs,
+        cone, foot, sweep, bankX: 0, bankZ: 0, prevX: d.pos.x, prevZ: d.pos.z, scanPhase: d.idx * 1.3
+      });
+    }
+
+    // --- command drones: MAIN and BKUP are larger, ordinary quadcopters ---
+    for (const spec of [
+      { id: "MAIN", pos: MAIN_POS, col: 0x22d3ee, css: "#67e8f9", scale: 2.0 },
+      { id: "BKUP", pos: BKUP_POS, col: 0xa78bfa, css: "#c4b5fd", scale: 1.8 }
+    ]) {
+      const air = makeAirframe(spec.scale, 4, spec.col, true);
+      air.hit.userData.droneId = spec.id;
+      const halo = new THREE.Mesh(new THREE.RingGeometry(0.8, 0.9, 36),
+        new THREE.MeshBasicMaterial({ color: spec.col, transparent: true, opacity: 0.42, side: THREE.DoubleSide, depthWrite: false }));
       halo.rotation.x = -Math.PI / 2;
-      halo.position.y = -0.3;
-      grp.add(halo);
-      const hit = new THREE.Mesh(new THREE.SphereGeometry(1.1, 8, 6), new THREE.MeshBasicMaterial({ visible: false }));
-      hit.userData.droneId = id;
-      grp.add(hit);
-      grp.position.set(posZ.x, posZ.y, posZ.z);
-      env.add(grp);
-      hitList.push(hit);
-      coordViews.push({ id, grp, coreMat, core, halo });
+      halo.position.y = -0.34;
+      air.grp.add(halo);
+      const label = makeLabelSprite();
+      setLabelSprite(label, spec.id === "MAIN" ? "MAIN AI" : "BACKUP AI", spec.css);
+      label.sprite.scale.set(6 / spec.scale, 1.12 / spec.scale, 1);
+      label.sprite.position.y = 0.72;
+      air.grp.add(label.sprite);
+      air.grp.position.set(spec.pos.x, spec.pos.y, spec.pos.z);
+      env.add(air.grp);
+      hitList.push(air.hit);
+      coordViews.push({
+        id: spec.id, grp: air.grp, bodyMat: air.bodyMat, statusMat: air.statusMat,
+        glow: air.glow, halo, label, hit: air.hit, rotors: air.rotors, blurs: air.blurs,
+        accent: spec.col, base: spec.pos, phase: spec.id === "MAIN" ? 0 : 1.7
+      });
     }
     // --- dynamic overlays: links, packets, zones, coverage ---
     const MAX_LINKS = 120;
@@ -4662,7 +4654,6 @@
       for (let i = 0; i < a.count; i++) { xz[i * 2] = a.getX(i); xz[i * 2 + 1] = a.getZ(i); }
       return { attr: a, xz };
     })();
-    T.baseCores = baseCores;
     T.featureViews = featureViews;
     T.droneViews = droneViews;
     T.coordViews = coordViews;
@@ -4758,13 +4749,6 @@
       }
       a.needsUpdate = true;
     }
-    // base cores: rotating shells, scanning dishes and breathing beacons
-    for (const b of (T.baseCores || [])) {
-      if (b.shell) { b.shell.rotation.y -= 0.006; b.shell.rotation.z += 0.004; }
-      if (b.spinRing) b.spinRing.rotation.z += 0.01;
-      if (b.dish) b.dish.rotation.y = Math.sin(t * 0.35 + (b.main ? 0 : 1.1)) * 0.35;
-      if (b.glow) b.glow.material.opacity = 0.45 + 0.15 * Math.sin(t * 1.8 + (b.main ? 0 : 1.2));
-    }
     // features
     const now = performance.now() / 1000;
     for (const view of (T.featureViews || [])) {
@@ -4814,7 +4798,7 @@
       setLabelSprite(view.label, labelText, labelColor);
       view.label.sprite.visible = state.layers.labels && state.layers.features;
     }
-    // drones
+    // drones + their ground-scanning sensor sweeps
     for (const view of (T.droneViews || [])) {
       const d = view.d;
       view.grp.position.set(d.pos.x, d.pos.y, d.pos.z);
@@ -4853,25 +4837,57 @@
       }
       // spinning props and a soft rotor disc; a lost drone's props stop
       if (!d.failed) {
-        for (const r of view.rotors) r.rotation.y += 0.48;
-        for (const b of view.blurs) b.rotation.z += 0.012;
+        for (const r of view.rotors) r.mesh.rotation.y += 0.48 * r.dir;
+        for (const b of view.blurs) b.mesh.rotation.z += 0.012 * b.dir;
       }
+      // the sensor cone stays vertical while the airframe banks
+      const apexY = d.pos.y - 0.28;
+      const groundY = Math.max(heightAt(d.pos.x, d.pos.z), (state.terrain ? state.terrain.waterLevel : 0) * 0.9);
+      const scanH = Math.max(0.55, apexY - groundY - 0.04);
+      const scanR = 0.95 + scanH * 0.15;
+      view.scanPhase += 0.018;
+      view.cone.visible = !d.failed;
+      view.cone.position.set(d.pos.x, apexY, d.pos.z);
+      view.cone.scale.set(scanR, scanH, scanR);
+      view.cone.material.opacity = 0.045 + 0.018 * Math.sin(t * 2.6 + d.idx);
+      view.foot.visible = !d.failed;
+      view.foot.position.set(d.pos.x, groundY + 0.06, d.pos.z);
+      view.foot.scale.set(scanR, scanR, 1);
+      view.foot.material.opacity = 0.2 + 0.08 * Math.sin(t * 3 + d.idx);
+      view.sweep.visible = !d.failed;
+      view.sweep.position.set(d.pos.x, apexY, d.pos.z);
+      view.sweep.scale.set(scanR, scanH, scanR);
+      view.sweep.rotation.y = view.scanPhase;
       const selected = state.selected === d.id;
       const pulse = 0.5 + 0.5 * Math.sin(t * 2.2 + d.idx);
       view.ring.material.opacity = selected ? 0.7 : 0;
       view.ring.scale.setScalar(1 + (selected ? pulse * 0.16 : 0));
       view.glow.visible = !d.failed;
     }
-    // coordinators
+    // command drones: larger quadcopters holding station near their logical positions
     for (const view of (T.coordViews || [])) {
       const isMain = view.id === "MAIN";
       const active = isMain ? state.main.active : state.backup.active;
-      view.core.rotation.y = t * 0.8;
-      view.core.rotation.x = t * 0.3;
-      view.grp.visible = true;
-      view.coreMat.color.setHex(!active ? 0xfb7185 : isMain ? 0x22d3ee : 0xa78bfa);
-      view.halo.material.opacity = active ? 0.5 : 0.2;
-      view.grp.scale.setScalar(active ? 1 : 0.7);
+      const p = view.base;
+      view.grp.position.set(
+        p.x + Math.sin(t * 0.22 + view.phase) * 0.28,
+        p.y + Math.sin(t * 0.7 + view.phase) * 0.16,
+        p.z + Math.cos(t * 0.18 + view.phase) * 0.28
+      );
+      view.grp.rotation.y = Math.sin(t * 0.16 + view.phase) * 0.35 + (isMain ? 0.2 : -0.4);
+      view.grp.rotation.x = Math.sin(t * 0.5 + view.phase) * 0.035;
+      view.grp.rotation.z = Math.cos(t * 0.42 + view.phase) * 0.035;
+      const blink = 0.55 + 0.45 * Math.sin(t * 2.4 + view.phase);
+      view.bodyMat.color.setHex(active ? (isMain ? 0x9aabb5 : 0xa79cbd) : 0x8e6a70);
+      view.bodyMat.emissive.setHex(!active ? 0x26080c : isMain ? 0x0a4a5a : 0x2a1a52);
+      view.bodyMat.emissiveIntensity = active ? 0.3 + blink * 0.16 : 0.12;
+      view.statusMat.color.setHex(active ? view.accent : 0xfb7185).multiplyScalar(active ? 0.45 + blink * 0.55 : 0.55);
+      view.glow.material.color.setHex(active ? view.accent : 0xfb7185);
+      view.glow.material.opacity = active ? 0.4 + blink * 0.14 : 0.16;
+      view.halo.material.opacity = active ? 0.32 + blink * 0.14 : 0.14;
+      view.label.sprite.visible = state.layers.labels;
+      for (const r of view.rotors) r.mesh.rotation.y += (active ? 0.36 : 0.1) * r.dir;
+      for (const b of view.blurs) b.mesh.rotation.z += (active ? 0.008 : 0.002) * b.dir;
     }
     // links
     if (T.linkLines) {
