@@ -118,8 +118,10 @@
     maxLog: 42
   };
 
-  const MAIN_POS = { x: 0, y: 7.8, z: 0 };
-  const BKUP_POS = { x: -6.2, y: 5.0, z: -6.2 };
+  // Fixed ground command posts: MAIN at the map start, BKUP at the far end.
+  // y is refreshed from the terrain height whenever a map is rebuilt.
+  const MAIN_POS = { x: -15, y: 0.4, z: 15 };
+  const BKUP_POS = { x: 15, y: 0.4, z: -15 };
   const ZONE_POS = { x: -7.2, z: 5.4 };
   const ZONE_R = 4.6;
   const STORM_X = 2.4;
@@ -698,7 +700,8 @@
       const x = (rng() * 2 - 1) * 19, z = (rng() * 2 - 1) * 19;
       const h = terrainHeightFor(mapId, x, z);
       if (h < terr.waterLevel + 0.28 || h > 3.4) continue;
-      if (Math.hypot(x, z) < 3.4 || Math.hypot(x + 6.2, z + 6.2) < 3.4) continue;
+      if (Math.hypot(x - MAIN_POS.x, z - MAIN_POS.z) < 3.4 ||
+          Math.hypot(x - BKUP_POS.x, z - BKUP_POS.z) < 3.4) continue;
       let bad = false;
       for (const f of features) {
         if (Math.hypot(x - f.x, z - f.z) < f.r + 0.7) { bad = true; break; }
@@ -725,7 +728,8 @@
       const x = (rng() * 2 - 1) * 19, z = (rng() * 2 - 1) * 19;
       const h = terrainHeightFor(mapId, x, z);
       if (h < terr.waterLevel + 0.05 || h > 3.6) continue;
-      if (Math.hypot(x, z) < 3.0) continue;
+      if (Math.hypot(x - MAIN_POS.x, z - MAIN_POS.z) < 3.0 ||
+          Math.hypot(x - BKUP_POS.x, z - BKUP_POS.z) < 3.0) continue;
       rocks.push({ x, z, scale: 0.3 + rng() * 0.55, shade: 0.3 + rng() * 0.4 });
     }
     const buildings = terr.buildings.map((b) => ({
@@ -736,6 +740,9 @@
       mapId, gridN: N, extent, step, heights, scorch, trees, rocks, buildings,
       roads: terr.roads, waterLevel: terr.waterLevel
     };
+    // command posts sit on the ground, with link endpoints just above the pad
+    MAIN_POS.y = heightAt(MAIN_POS.x, MAIN_POS.z) + 0.45;
+    BKUP_POS.y = heightAt(BKUP_POS.x, BKUP_POS.z) + 0.45;
     state.terrainSignature = mapId;
     if (state.three && state.three.ready) buildThreeMap(mapId);
   }
@@ -1536,7 +1543,7 @@
     } else {
       chipsHtml += chip("no active mesh links", "none");
     }
-    if (hasCoordLink) chipsHtml += chip("coordinator link", "route");
+    if (hasCoordLink) chipsHtml += chip("command link", "route");
     el.inspector.innerHTML += chipsHtml + "</div></div>";
   }
 
@@ -4414,7 +4421,7 @@
       featureGroup.add(marker);
       featureViews.push({ f, truth, marker, ringMat, ring, beamMat, diaMat, dia, label, hex, type });
     }
-    // --- aircraft: one builder for the sensor fleet and the two command drones ---
+    // --- aircraft: the sensor fleet (commanders are ground outposts now) ---
     const droneViews = [];
     const coordViews = [];
     const droneGroup = new THREE.Group();
@@ -4579,29 +4586,82 @@
       });
     }
 
-    // --- command drones: MAIN and BKUP are larger, ordinary quadcopters ---
+    // --- coordinator outposts: fixed operator stations at opposite map ends ---
     for (const spec of [
-      { id: "MAIN", pos: MAIN_POS, col: 0x22d3ee, css: "#67e8f9", scale: 2.0 },
-      { id: "BKUP", pos: BKUP_POS, col: 0xa78bfa, css: "#c4b5fd", scale: 1.8 }
+      { id: "MAIN", pos: MAIN_POS, col: 0x22d3ee, css: "#67e8f9", name: "MAIN · START POST" },
+      { id: "BKUP", pos: BKUP_POS, col: 0xa78bfa, css: "#c4b5fd", name: "BACKUP · END POST" }
     ]) {
-      const air = makeAirframe(spec.scale, 4, spec.col, true);
-      air.hit.userData.droneId = spec.id;
-      const halo = new THREE.Mesh(new THREE.RingGeometry(0.8, 0.9, 36),
-        new THREE.MeshBasicMaterial({ color: spec.col, transparent: true, opacity: 0.42, side: THREE.DoubleSide, depthWrite: false }));
-      halo.rotation.x = -Math.PI / 2;
-      halo.position.y = -0.34;
-      air.grp.add(halo);
+      const g = new THREE.Group();
+      g.position.set(spec.pos.x, heightAt(spec.pos.x, spec.pos.z), spec.pos.z);
+      env.add(g);
+
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(2.05, 2.2, 0.18, 24), concreteMat);
+      pad.position.y = 0.09;
+      pad.receiveShadow = true;
+      g.add(pad);
+      const ring = new THREE.Mesh(new THREE.RingGeometry(1.55, 1.72, 40),
+        new THREE.MeshBasicMaterial({ color: spec.col, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false }));
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.19;
+      g.add(ring);
+
+      // operator console and the spot a user would stand
+      const consoleBody = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.55, 0.62), darkMat);
+      consoleBody.position.set(0, 0.48, 0.25);
+      consoleBody.castShadow = true;
+      g.add(consoleBody);
+      const screenMat = std({ color: spec.col, emissive: spec.col, emissiveIntensity: 0.8, roughness: 0.35 });
+      const screen = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.48, 0.04), screenMat);
+      screen.position.set(0, 0.93, 0.08);
+      screen.rotation.x = -0.22;
+      g.add(screen);
+      const suitMat = std({ color: 0xd2dade, roughness: 0.85 });
+      const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, 0.58, 10), suitMat);
+      torso.position.set(0, 0.72, -0.58);
+      torso.castShadow = true;
+      g.add(torso);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), suitMat);
+      head.position.set(0, 1.13, -0.58);
+      g.add(head);
+      const chair = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.1, 0.5), darkMat);
+      chair.position.set(0, 0.46, -0.6);
+      g.add(chair);
+      const chairBack = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.5, 0.08), darkMat);
+      chairBack.position.set(0, 0.72, -0.84);
+      g.add(chairBack);
+
+      // comms mast with a slowly sweeping dish and a status beacon
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.08, 1.8, 8), metalMat);
+      mast.position.set(-1.42, 1.0, -1.0);
+      mast.castShadow = true;
+      g.add(mast);
+      const dish = new THREE.Mesh(new THREE.ConeGeometry(0.38, 0.16, 14, 1, true), metalMat);
+      dish.position.set(-1.42, 1.96, -1.0);
+      dish.rotation.x = -0.6;
+      g.add(dish);
+      const beaconMat = new THREE.MeshBasicMaterial({ color: spec.col });
+      const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), beaconMat);
+      beacon.position.set(-1.42, 2.06, -1.0);
+      g.add(beacon);
+
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: T.glowTex, color: spec.col, transparent: true, opacity: 0.32, depthWrite: false
+      }));
+      glow.scale.set(2.6, 2.6, 1);
+      glow.position.set(0, 1.1, 0);
+      g.add(glow);
       const label = makeLabelSprite();
-      setLabelSprite(label, spec.id === "MAIN" ? "MAIN AI" : "BACKUP AI", spec.css);
-      label.sprite.scale.set(6 / spec.scale, 1.12 / spec.scale, 1);
-      label.sprite.position.y = 0.72;
-      air.grp.add(label.sprite);
-      air.grp.position.set(spec.pos.x, spec.pos.y, spec.pos.z);
-      env.add(air.grp);
-      hitList.push(air.hit);
+      setLabelSprite(label, spec.name, spec.css);
+      label.sprite.scale.set(6, 1.12, 1);
+      label.sprite.position.set(0, 2.6, 0);
+      g.add(label.sprite);
+      const hit = new THREE.Mesh(new THREE.SphereGeometry(1.9, 10, 8), new THREE.MeshBasicMaterial({ visible: false }));
+      hit.position.y = 0.9;
+      hit.userData.droneId = spec.id;
+      g.add(hit);
+      hitList.push(hit);
       coordViews.push({
-        id: spec.id, grp: air.grp, bodyMat: air.bodyMat, statusMat: air.statusMat,
-        glow: air.glow, halo, label, hit: air.hit, rotors: air.rotors, blurs: air.blurs,
+        id: spec.id, grp: g, glow, ring, screenMat, beaconMat, dish, label, hit,
         accent: spec.col, base: spec.pos, phase: spec.id === "MAIN" ? 0 : 1.7
       });
     }
@@ -4615,6 +4675,16 @@
     const linkLines = new THREE.LineSegments(linkGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false }));
     linkLines.frustumCulled = false;
     env.add(linkLines);
+    // command links are a separate dashed, amber channel from the posts to drones
+    const MAX_CMD = 40;
+    const cmdPos = new Float32Array(MAX_CMD * 2 * 3);
+    const cmdGeo = new THREE.BufferGeometry();
+    cmdGeo.setAttribute("position", new THREE.BufferAttribute(cmdPos, 3));
+    const cmdLines = new THREE.LineSegments(cmdGeo, new THREE.LineDashedMaterial({
+      color: 0xffd166, dashSize: 0.5, gapSize: 0.32, transparent: true, opacity: 0.92, depthWrite: false
+    }));
+    cmdLines.frustumCulled = false;
+    env.add(cmdLines);
     const MAX_PKT = 90;
     const pktPos = new Float32Array(MAX_PKT * 3);
     const pktCol = new Float32Array(MAX_PKT * 3);
@@ -4659,6 +4729,7 @@
     T.coordViews = coordViews;
     T.hitList = hitList;
     T.linkLines = linkLines; T.linkPos = linkPos; T.linkCol = linkCol;
+    T.cmdLines = cmdLines; T.cmdPos = cmdPos;
     T.pktPts = pktPts; T.pktPos = pktPos; T.pktCol = pktCol;
     T.stormMesh = stormMesh; T.stormEdge = stormEdge; T.interMesh = interMesh;
     T.gridGroup = gridGroup; T.coverageGroup = coverageGroup; T.treeGroup = treeGroup;
@@ -4864,40 +4935,35 @@
       view.ring.scale.setScalar(1 + (selected ? pulse * 0.16 : 0));
       view.glow.visible = !d.failed;
     }
-    // command drones: larger quadcopters holding station near their logical positions
+    // coordinator outposts: beacon, console screen and dish activity
     for (const view of (T.coordViews || [])) {
-      const isMain = view.id === "MAIN";
-      const active = isMain ? state.main.active : state.backup.active;
-      const p = view.base;
-      view.grp.position.set(
-        p.x + Math.sin(t * 0.22 + view.phase) * 0.28,
-        p.y + Math.sin(t * 0.7 + view.phase) * 0.16,
-        p.z + Math.cos(t * 0.18 + view.phase) * 0.28
-      );
-      view.grp.rotation.y = Math.sin(t * 0.16 + view.phase) * 0.35 + (isMain ? 0.2 : -0.4);
-      view.grp.rotation.x = Math.sin(t * 0.5 + view.phase) * 0.035;
-      view.grp.rotation.z = Math.cos(t * 0.42 + view.phase) * 0.035;
+      const active = view.id === "MAIN" ? state.main.active : state.backup.active;
       const blink = 0.55 + 0.45 * Math.sin(t * 2.4 + view.phase);
-      view.bodyMat.color.setHex(active ? (isMain ? 0x9aabb5 : 0xa79cbd) : 0x8e6a70);
-      view.bodyMat.emissive.setHex(!active ? 0x26080c : isMain ? 0x0a4a5a : 0x2a1a52);
-      view.bodyMat.emissiveIntensity = active ? 0.3 + blink * 0.16 : 0.12;
-      view.statusMat.color.setHex(active ? view.accent : 0xfb7185).multiplyScalar(active ? 0.45 + blink * 0.55 : 0.55);
-      view.glow.material.color.setHex(active ? view.accent : 0xfb7185);
-      view.glow.material.opacity = active ? 0.4 + blink * 0.14 : 0.16;
-      view.halo.material.opacity = active ? 0.32 + blink * 0.14 : 0.14;
+      const col = active ? view.accent : 0xfb7185;
+      view.beaconMat.color.setHex(col).multiplyScalar(active ? 0.4 + blink * 0.6 : 0.55);
+      view.glow.material.color.setHex(col);
+      view.glow.material.opacity = active ? 0.24 + blink * 0.12 : 0.1;
+      view.ring.material.opacity = active ? 0.28 + blink * 0.16 : 0.12;
+      view.screenMat.emissiveIntensity = active ? 0.55 + blink * 0.4 : 0.08;
+      view.dish.rotation.y = Math.sin(t * 0.5 + view.phase) * 0.6;
       view.label.sprite.visible = state.layers.labels;
-      for (const r of view.rotors) r.mesh.rotation.y += (active ? 0.36 : 0.1) * r.dir;
-      for (const b of view.blurs) b.mesh.rotation.z += (active ? 0.008 : 0.002) * b.dir;
     }
-    // links
+    // links: mesh traffic stays solid; coordinator commands use a dashed amber channel
     if (T.linkLines) {
-      let idx = 0;
+      let idx = 0, cmd = 0;
       const cTree = [0.4, 0.91, 0.98], cLocal = [0.98, 0.75, 0.14], cBase = [0.27, 0.59, 0.72];
       for (const e of state.edges) {
-        if (idx >= 120) break;
         const na = nodeById(e.a), nb = nodeById(e.b);
         if (!na || !nb) continue;
         const pa = na.pos, pb = nb.pos;
+        if ((e.kind === "main" || e.kind === "backup") && T.cmdLines) {
+          if (cmd >= 40) continue;
+          T.cmdPos[cmd * 6] = pa.x; T.cmdPos[cmd * 6 + 1] = pa.y; T.cmdPos[cmd * 6 + 2] = pa.z;
+          T.cmdPos[cmd * 6 + 3] = pb.x; T.cmdPos[cmd * 6 + 4] = pb.y; T.cmdPos[cmd * 6 + 5] = pb.z;
+          cmd++;
+          continue;
+        }
+        if (idx >= 120) continue;
         T.linkPos[idx * 6] = pa.x; T.linkPos[idx * 6 + 1] = pa.y; T.linkPos[idx * 6 + 2] = pa.z;
         T.linkPos[idx * 6 + 3] = pb.x; T.linkPos[idx * 6 + 4] = pb.y; T.linkPos[idx * 6 + 5] = pb.z;
         const col = e.tree ? cTree : e.local ? cLocal : cBase;
@@ -4909,6 +4975,12 @@
       T.linkLines.geometry.attributes.position.needsUpdate = true;
       T.linkLines.geometry.attributes.color.needsUpdate = true;
       T.linkLines.visible = state.layers.links;
+      if (T.cmdLines) {
+        T.cmdLines.geometry.setDrawRange(0, cmd * 2);
+        T.cmdLines.geometry.attributes.position.needsUpdate = true;
+        T.cmdLines.computeLineDistances();
+        T.cmdLines.visible = state.layers.links;
+      }
     }
     // packets
     if (T.pktPts) {
@@ -5334,13 +5406,14 @@
     const base = [];
     const local = [];
     const tree = [];
+    const command = [];
 
     for (const e of state.edges) {
       const a = projectPoint(nodeById(e.a).pos);
       const b = projectPoint(nodeById(e.b).pos);
       if (!a || !b) continue;
       if (e.kind === "main" || e.kind === "backup") {
-        base.push([a, b, e]);
+        command.push([a, b, e]);
       } else if (e.tree) {
         tree.push([a, b, e]);
       } else if (e.local) {
@@ -5381,6 +5454,22 @@
     }
     ctx.stroke();
     ctx.restore();
+
+    // Coordinator commands use a distinct dashed amber channel.
+    if (command.length) {
+      ctx.save();
+      ctx.setLineDash([7, 4]);
+      ctx.lineDashOffset = -((state.time * 8) % 11);
+      ctx.strokeStyle = "rgba(255, 209, 102, 0.72)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (const [a, b] of command) {
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // Severed links remain visible as broken, dashed red traces.
     ctx.save();
@@ -5673,7 +5762,7 @@
         ctx.fillStyle = "rgba(251, 113, 133, 0.85)";
         ctx.font = "9px 'JetBrains Mono', monospace";
         ctx.textAlign = "center";
-        ctx.fillText(isMain ? "MAIN AI · OFFLINE" : "BACKUP · OFFLINE", p.x, p.y + R + 15);
+        ctx.fillText(isMain ? "MAIN POST · OFFLINE" : "BACKUP POST · OFFLINE", p.x, p.y + R + 15);
       }
       if (isMain && state.handoverTimer > 0) {
         ctx.fillStyle = "rgba(251, 191, 36, 0.9)";
@@ -5744,7 +5833,7 @@
       ctx.textAlign = "center";
       ctx.font = "9px 'JetBrains Mono', monospace";
       ctx.fillStyle = isMain ? "rgba(165, 243, 252, 0.9)" : "rgba(196, 181, 253, 0.9)";
-      ctx.fillText(isMain ? "MAIN AI" : "BACKUP AI", p.x, p.y + R + 17);
+      ctx.fillText(isMain ? "MAIN · START" : "BACKUP · END", p.x, p.y + R + 17);
       if (state.acting === id) {
         ctx.font = "7px 'JetBrains Mono', monospace";
         ctx.fillStyle = isMain ? "rgba(52, 211, 153, 0.9)" : "rgba(52, 211, 153, 0.9)";
@@ -5998,7 +6087,8 @@
         const a = layout.get(e.a);
         const b = layout.get(e.b);
         if (!a || !b) continue;
-        if (e.tree) drawTopoEdge(a, b, "rgba(103, 232, 249, 0.55)", 1.4, null, 5);
+        if (e.kind === "main" || e.kind === "backup") drawTopoEdge(a, b, "rgba(255, 209, 102, 0.7)", 1.5, [6, 4], 0);
+        else if (e.tree) drawTopoEdge(a, b, "rgba(103, 232, 249, 0.55)", 1.4, null, 5);
         else if (e.local) drawTopoEdge(a, b, "rgba(251, 191, 36, 0.3)", 1.1, null, 0);
         else drawTopoEdge(a, b, "rgba(70, 150, 183, 0.18)", 1, null, 0);
       }
