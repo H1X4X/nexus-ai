@@ -4,17 +4,19 @@ This document records the v2 upgrade applied to the original single-page prototy
 
 ## v3 — full 3D map overhaul
 
-The WebGL scene was rebuilt for depth, material detail and situation-driven atmosphere. Everything still shares one deterministic terrain cache, so seeds and map switching behave exactly as before.
+The WebGL scene was rebuilt for believable materials, depth and situation-driven atmosphere. Everything still shares one deterministic terrain cache, so seeds and map switching behave exactly as before. All surface textures are generated procedurally into canvases at startup — still no image requests or runtime dependencies.
 
-- **Lighting & sky** — warm key light, cool fill light and hemisphere bounce replace the single flat light. ACES tone mapping and sRGB output give richer contrast, and a gradient sky dome tints with the situation (blue-grey in rain, violet at night and during blackout).
-- **Terrain** — 120×120 hillfield (up from 90×90) with fine colour grain, subtle contour banding and a solid skirt so the map no longer floats. The terrain now receives shadows.
-- **Water** — segmented surface with specular response and animated vertex swell; rain adds a higher water level and larger waves.
-- **Forest & rocks** — every tree is now an instanced tapered trunk plus two irregular canopy tiers with individual rotation, tilt and colour variation, grounded by a soft contact shadow. Rocks use varied icosahedra with per-instance tilt instead of identical tetrahedra.
-- **Buildings** — distinct silhouettes per type: gabled houses/cabins with windows and doors, observation towers with decks, rails and beacons, cylindrical tanks with domes and bands, raised bridges, and industrial plants with roof vents. Lit accents use emissive-looking basic materials; all structures cast shadows.
-- **Roads** — draped ribbon meshes with edge lines and dashed centres follow the terrain instead of thin floating lines.
+- **Materials** — colour maps, normal maps, roughness/metalness values and a generated environment cube replace flat Lambert colours. Ground, water, bark, foliage, grass, brick, stucco, concrete, wood, shingles, corrugated metal and asphalt are all synthesised locally.
+- **Lighting & sky** — warm key light, cool fill light and hemisphere bounce, soft shadows, ACES tone mapping, sRGB output, a gradient sky dome and a sun sprite. Exponential fog and light temperature shift with the situation (blue-grey rain, violet night/blackout).
+- **Terrain** — 120×120 hillfield (up from 90×90) with a repeating detail map, normal-mapped surface relief and a solid skirt so the map no longer floats. The terrain now receives shadows.
+- **Water** — segmented surface with scrolling ripple normals, specular highlights and environment reflections; rain adds a higher water level and larger waves.
+- **Forest & rocks** — trees use textured bark trunks and crossed, alpha-cut foliage cards (needle conifers and broadleaf clusters) with individual rotation and tint, plus grass tufts and soft contact shadows. Rocks are irregular normal-mapped stone.
+- **Buildings** — distinct silhouettes per type with textured surfaces and real architectural detail: gabled houses/cabins with framed glass windows, doors and chimneys; towers with observation decks and antennas; tanks with domes, bands and ladders; bridges with asphalt decks and rails; plants with roof vents and pipework.
+- **Drones** — each drone is now a quadcopter: flattened fuselage with glossy canopy, carbon spars, four motors, spinning props with soft rotor discs, landing skids, gimballed camera, antenna and status LEDs. Airframes bank into movement, props stop when a drone fails, and colours reflect connected/leader/unrouted/lost state.
+- **Roads** — UV-mapped asphalt ribbons with worn centre lines and soft shoulders follow the terrain instead of thin floating lines.
 - **Coordinator bases** — layered hexagonal platforms with pylons, spinning rings, scanning dishes, wireframe shells, glowing beacons and light beams.
 - **Rain scenario** — 700 animated streaks drift across the scene, fog closes in, and lighting flattens.
-- All new materials and geometries are disposed on map change; the shared glow/sky textures are deliberately preserved.
+- All new materials and geometries are disposed on map change; the shared texture atlas (glow, sky and procedural maps) is deliberately preserved.
 
 ## New simulator features
 
