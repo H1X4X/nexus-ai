@@ -1,6 +1,20 @@
 # NEXUS AI v2 upgrade notes
 
-This document records the v2 upgrade applied to the original single-page prototype. The app remains dependency-free at runtime: plain JavaScript, local fonts and a locally vendored Three.js r128.
+This document records the v2 upgrade applied to the original single-page prototype, plus the v3 3D-map visual overhaul. The app remains dependency-free at runtime: plain JavaScript, local fonts and a locally vendored Three.js r128.
+
+## v3 — full 3D map overhaul
+
+The WebGL scene was rebuilt for depth, material detail and situation-driven atmosphere. Everything still shares one deterministic terrain cache, so seeds and map switching behave exactly as before.
+
+- **Lighting & sky** — warm key light, cool fill light and hemisphere bounce replace the single flat light. ACES tone mapping and sRGB output give richer contrast, and a gradient sky dome tints with the situation (blue-grey in rain, violet at night and during blackout).
+- **Terrain** — 120×120 hillfield (up from 90×90) with fine colour grain, subtle contour banding and a solid skirt so the map no longer floats. The terrain now receives shadows.
+- **Water** — segmented surface with specular response and animated vertex swell; rain adds a higher water level and larger waves.
+- **Forest & rocks** — every tree is now an instanced tapered trunk plus two irregular canopy tiers with individual rotation, tilt and colour variation, grounded by a soft contact shadow. Rocks use varied icosahedra with per-instance tilt instead of identical tetrahedra.
+- **Buildings** — distinct silhouettes per type: gabled houses/cabins with windows and doors, observation towers with decks, rails and beacons, cylindrical tanks with domes and bands, raised bridges, and industrial plants with roof vents. Lit accents use emissive-looking basic materials; all structures cast shadows.
+- **Roads** — draped ribbon meshes with edge lines and dashed centres follow the terrain instead of thin floating lines.
+- **Coordinator bases** — layered hexagonal platforms with pylons, spinning rings, scanning dishes, wireframe shells, glowing beacons and light beams.
+- **Rain scenario** — 700 animated streaks drift across the scene, fog closes in, and lighting flattens.
+- All new materials and geometries are disposed on map change; the shared glow/sky textures are deliberately preserved.
 
 ## New simulator features
 
