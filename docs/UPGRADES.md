@@ -1,8 +1,19 @@
 # NEXUS AI upgrade notes
 
-This document records the v2 upgrade applied to the original single-page prototype, the v3 3D-map visual overhaul, the v4 distributed-architecture upgrade and the v5 physical-world/mission-AI upgrade. The app remains dependency-free at runtime: plain JavaScript, local fonts and a locally vendored Three.js r128.
+This document records the v2 upgrade applied to the original single-page prototype, the v3 3D-map visual overhaul, the v4 distributed-architecture upgrade, the v5 physical-world/mission-AI upgrade and the v6 reusable drone-system extraction. The app remains dependency-free at runtime: plain JavaScript, local fonts and a locally vendored Three.js r128.
 
 The full engineering interpretation of the distributed work is in [`ARCHITECTURE.md`](ARCHITECTURE.md). The live simulator exposes its core state in the **Distributed architecture** strip below the metrics.
+
+## v6 — complete reusable drone system
+
+The v6 upgrade extracts all drone behaviour into `assets/drone-system.js`, a standalone dependency-free module with a documented API (`docs/DRONE_SYSTEM.md`). The command center now delegates to this module instead of carrying a second copy of the logic.
+
+- **Mission and task queues** — `missionPlanFor()`, `setMission()`, `enqueueTask()`, `nextTask()` and `clearTasks()` expose explicit routes and tasks. Every waypoint has a matching task record.
+- **Autonomy state machine** — `updateAutonomy()` owns takeoff, route, survey, RTL, landing, hold and failed modes with battery, recall, lost-link and trust precedence.
+- **Physical sensing** — `canObserve()`, `lineOfSightBlocked()` and `updateMapFeatures()` own range/FOV/LOS checks, onboard buffering, delayed routed delivery, stale/expired records and epoch rejection.
+- **Radio geometry** — `radioLineBlocked()` shares terrain and building obstruction rules with the rest of the system.
+- **Fault and export helpers** — `failDrone()`, `restoreDrone()`, `isolateDrone()`, `trustDrone()`, `recallAll()`, `releaseRecall()` and `buildFleetSummary()` are reusable outside the UI.
+- **Verification** — `tests/drone-system.test.mjs` covers the standalone module; wiring tests confirm the live simulator loads and delegates to it. Export version advances to `6.0.0`.
 
 ## v5 — doubled world and mission-driven autonomy
 
@@ -30,7 +41,7 @@ The v4 upgrade turns the proposal into a set of visible, testable simulation rul
 - **Measured targets and roadmap** — proposed prototype targets (5 initial drones, 1–2 s status, sub-5 s failover, reconnection sync) are defined in code and documentation. The architecture roadmap is staged from simulation to a controlled hardware prototype.
 - **Documentation** — the static architecture tabs now describe leases, epochs, sensor fusion, three channels, independent safety, zero trust and privacy. The run notes explain epoch-guarded failover.
 
-At the time of v4, the export version remained `2.0.0`; new data was additive under `architecture`, `map.observations` and `audit`. v5 advances the version to `5.0.0` while keeping those fields and adding `world` and `fleet`.
+At the time of v4, the export version remained `2.0.0`; new data was additive under `architecture`, `map.observations` and `audit`. v5 advances the version to `5.0.0` while keeping those fields and adding `world` and `fleet`. v6 advances it to `6.0.0` to mark the reusable drone-system extraction.
 
 ## v3 — full 3D map overhaul
 

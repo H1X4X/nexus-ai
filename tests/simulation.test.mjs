@@ -7,6 +7,7 @@ import vm from "node:vm";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 let source = readFileSync(join(root, "assets/app.js"), "utf8");
+const droneSystemSource = readFileSync(join(root, "assets/drone-system.js"), "utf8");
 
 /* The app is an IIFE that boots against the DOM. For tests we replace the
    boot call with an export of its private helpers, then run it in a tiny
@@ -70,6 +71,8 @@ function loadApp() {
       addEventListener: noop
     }
   };
+  vm.runInNewContext(droneSystemSource, sandbox, { filename: "drone-system.js" });
+  sandbox.window.NexusDroneSystem = sandbox.NexusDroneSystem;
   vm.runInNewContext(source, sandbox, { filename: "app.js" });
   return sandbox.__NEXUS_TEST__;
 }
@@ -272,7 +275,7 @@ test("telemetry history is sampled on simulated time and capped", () => {
   assert.equal(app.state.history.length, 120, "history should keep 120 samples");
   assert.equal(app.state.history[0].packetRate, 6, "packet rate should be per second");
   const summary = app.buildRunSummary();
-  assert.equal(summary.version, "5.0.0");
+  assert.equal(summary.version, "6.0.0");
   assert.equal(summary.telemetry.intervalSeconds, 0.5);
   assert.equal(summary.telemetry.samples.length, 120);
 });

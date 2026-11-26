@@ -26,9 +26,11 @@ test("required files exist", () => {
     "sitemap.xml",
     "README.md",
     "docs/ARCHITECTURE.md",
+    "docs/DRONE_SYSTEM.md",
     "docs/UPGRADES.md",
     "package.json",
     "assets/app.js",
+    "assets/drone-system.js",
     "assets/styles.css",
     "assets/vendor/three.min.js",
     "assets/fonts/fonts.css",
@@ -169,6 +171,21 @@ test("v5 physical world and mission hooks are present", () => {
     assert.ok(upgrades.includes(phrase), `UPGRADES.md missing: ${phrase}`);
   }
   assert.ok(readme.includes("Mission-driven fleet"), "README is missing mission fleet summary");
+});
+
+test("reusable drone system is loaded and drives the simulator", () => {
+  assert.ok(html.includes('src="assets/drone-system.js"'), "index.html does not load drone-system.js");
+  assert.ok(js.includes("NexusDroneSystem"), "app.js does not reference the drone system");
+  assert.ok(js.includes("droneSystem.updateAutonomy"), "app.js does not delegate autonomy");
+  assert.ok(js.includes("droneSystem.updateMapFeatures"), "app.js does not delegate observations");
+  const droneJs = read("assets/drone-system.js");
+  for (const token of [
+    "class DroneSystem", "createDroneSystem", "missionPlanFor", "enqueueTask",
+    "updateAutonomy", "updateMapFeatures", "radioLineBlocked", "buildFleetSummary",
+    "6.0.0"
+  ]) {
+    assert.ok(droneJs.includes(token), `drone-system.js missing token ${token}`);
+  }
 });
 
 test("docs and CI describe the v2 workflow", () => {

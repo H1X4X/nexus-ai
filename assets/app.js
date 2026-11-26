@@ -1015,297 +1015,67 @@
     inspectorSignature: ""
   };
 
+  /* The reusable drone system owns mission queues, navigation, autonomy,
+     sensing and observation routing. The command center supplies world
+     callbacks and keeps rendering/network logic local. */
+  const DroneSystemApi = (typeof window !== "undefined" && window.NexusDroneSystem) ||
+    globalThis.NexusDroneSystem;
+  const droneSystem = new DroneSystemApi.DroneSystem({
+    config: CFG,
+    world: WORLD,
+    posts: { main: MAIN_POS, backup: BKUP_POS },
+    random: nextRandom,
+    heightAt: (x, z) => heightAt(x, z),
+    buildings: () => (state.terrain ? state.terrain.buildings : []),
+    waterLevel: () => (state.terrain ? state.terrain.waterLevel : 0),
+    situation: () => currentSituation(),
+    dataTypeFor,
+    log: (message, tone) => logEvent(message, tone),
+    audit: (actor, action, result) => auditEvent(actor, action, result),
+    state
+  });
+
   /* ---------------- drone setup ---------------- */
 
   function clampToArena(v) {
-    return clamp(v, -(WORLD.halfExtent - 2), WORLD.halfExtent - 2);
+    return droneSystem.clampToArena(v);
   }
 
-  // Relay patrol phase offsets around the 12-stop loop. Mixed parity keeps
-  // the short approach legs to both posts occupied as the group rotates.
-  const RELAY_PHASES = [0, 1, 2, 6, 7, 10];
+  // Relay patrol phase offsets come from the shared drone system so every
+  // consumer sees the same staggered post-to-post coverage pattern.
+  const RELAY_PHASES = DroneSystemApi.RELAY_PHASES;
 
-  const CORRIDOR = (() => {
-    const dx = BKUP_POS.x - MAIN_POS.x, dz = BKUP_POS.z - MAIN_POS.z;
-    const len = Math.hypot(dx, dz) || 1;
-    return {
-      dx, dz, len,
-      px: -dz / len,
-      pz: dx / len,
-      point(t, lane) {
-        return {
-          x: clampToArena(MAIN_POS.x + dx * t + this.px * lane),
-          z: clampToArena(MAIN_POS.z + dz * t + this.pz * lane)
-        };
-      },
-      tFor(x, z) {
-        return ((x - MAIN_POS.x) * dx + (z - MAIN_POS.z) * dz) / (len * len);
-      }
-    };
-  })();
-
-  function relayLane(i) {
-    return ((i % 3) - 1) * 1.3;
-  }
-
-  // Relay aircraft are spaced along the whole post-to-post corridor. Survey
-  // aircraft start on the same backbone, then branch to real map features via
-  // a staging point so the branch stays within radio range.
   function missionPlanFor(i) {
-    const relayCount = Math.ceil(CFG.count / 2);
-    if (i % 2 === 0) {
-      // A back-and-forth corridor patrol keeps one aircraft near each post
-      // instead of letting the whole relay group drift to one end.
-      const stops = Array.from({ length: relayCount + 1 }, (_, k) => k / relayCount);
-      const sequence = stops.concat(stops.slice(1, -1).reverse());
-      const waypoints = sequence.map((t, k) => Object.assign(
-        CORRIDOR.point(t, relayLane(k)),
-        { type: "relay", hold: k === 0 || k === relayCount ? 4.5 : 0 }
-      ));
-      return { mission: "relay corridor", waypoints, startIndex: RELAY_PHASES[i / 2] };
-    }
-
-    const features = (MAPS[state.mapId] || MAPS.wildfire).features
-      .slice()
-      .sort((a, b) => CORRIDOR.tFor(a.x, a.z) - CORRIDOR.tFor(b.x, b.z));
-    const anchor = Object.assign(
-      CORRIDOR.point((i + 0.5) / CFG.count, relayLane(i)),
-      { type: "relay", hold: 2 + (i - 1) / 2 * 0.4 }
-    );
-    const slot = (i - 1) / 2;
-    const targets = [
-      features[slot % features.length],
-      features[(slot + 3) % features.length]
-    ];
-    const waypoints = [anchor];
-    for (const f of targets) {
-      if (!f) continue;
-      const stage = Object.assign({
-        x: clampToArena((anchor.x + f.x) / 2),
-        z: clampToArena((anchor.z + f.z) / 2)
-      }, { type: "staging" });
-      waypoints.push(stage);
-      waypoints.push({ x: f.x, z: f.z, type: "survey", featureId: f.id });
-      waypoints.push(Object.assign({}, anchor));
-    }
-    return { mission: "feature survey", waypoints, startIndex: 0 };
+    const features = (MAPS[state.mapId] || MAPS.wildfire).features;
+    return droneSystem.missionPlanFor(i, features, CFG.count);
   }
 
   function resetMissionState() {
-    state.pendingObservations = [];
-    for (const d of state.drones) d.localQueue = [];
-    assignMissions();
+    droneSystem.resetMissionState(state.drones, state.features, state);
   }
 
   function assignMissions() {
-    for (const d of state.drones) {
-      const plan = missionPlanFor(d.idx);
-      d.mission = plan.mission;
-      d.waypoints = plan.waypoints;
-      d.wpIndex = plan.startIndex;
-      d.waypointTime = 0;
-      d.lastSurveyFeature = null;
-      d.rtlNotified = false;
-      d.localQueue = [];
-      const start = d.waypoints[d.wpIndex] || d.waypoints[0];
-      const next = d.waypoints[(d.wpIndex + 1) % d.waypoints.length] || MAIN_POS;
-      const gh = heightAt(start.x, start.z);
-      d.pos.x = start.x;
-      d.pos.z = start.z;
-      d.pos.y = gh + 0.15;
-      d.cruiseAlt = gh + 5.2 + (d.idx % 4) * 0.7;
-      d.heading = Math.atan2(next.z - start.z, next.x - start.x);
-      d.autonomyMode = "takeoff";
-      d.modeTime = d.idx * 0.18;
-      d.flightTime = 0;
-      d.windOffset = { x: 0, z: 0 };
-    }
+    droneSystem.assignMissions(state.drones, state.features, state);
   }
 
   function setAutonomyMode(d, mode) {
-    if (d.autonomyMode === mode) return;
-    d.autonomyMode = mode;
-    d.modeTime = 0;
+    droneSystem.setAutonomyMode(d, mode);
   }
 
   function nearestPost(d) {
-    return Math.hypot(d.pos.x - MAIN_POS.x, d.pos.z - MAIN_POS.z) <=
-      Math.hypot(d.pos.x - BKUP_POS.x, d.pos.z - BKUP_POS.z)
-      ? MAIN_POS
-      : BKUP_POS;
+    return droneSystem.nearestPost(d);
   }
 
   function steerAroundObstacles(d, dx, dz) {
-    const margin = CFG.obstacleMargin;
-    for (const b of state.terrain ? state.terrain.buildings : []) {
-      const gh = heightAt(b.x, b.z);
-      if (d.pos.y > gh + b.h + margin) continue;
-      const testX = d.pos.x + dx * 1.6, testZ = d.pos.z + dz * 1.6;
-      if (Math.abs(testX - b.x) < b.w / 2 + margin &&
-          Math.abs(testZ - b.z) < b.d / 2 + margin) {
-        const sign = d.idx % 2 ? 1 : -1;
-        return { x: -dz * sign, z: dx * sign };
-      }
-    }
-    return { x: dx, z: dz };
+    return droneSystem.steerAroundObstacles(d, dx, dz);
   }
 
   function updateAutonomy(dt) {
-    const sit = currentSituation();
-    for (const d of state.drones) {
-      const gh = heightAt(d.pos.x, d.pos.z);
-      d.obstacleState = "clear";
-      if (d.failed) {
-        setAutonomyMode(d, "failed");
-        d.pos.y = Math.max(gh + 0.08, d.pos.y - dt * CFG.descentRate);
-        continue;
-      }
-      if (!d.trusted) {
-        setAutonomyMode(d, "hold");
-        d.pos.y = Math.max(d.pos.y, gh + 2.2);
-        continue;
-      }
-
-      const reserve = d.battery <= state.safety.reserve;
-      if ((reserve || state.recall || (!d.connected && !d.group)) &&
-          (d.autonomyMode === "route" || d.autonomyMode === "survey" || d.autonomyMode === "takeoff")) {
-        setAutonomyMode(d, "rtl");
-        if (!d.rtlNotified) {
-          d.rtlNotified = true;
-          logEvent(
-            (reserve ? "Battery reserve reached" : state.recall ? "Safe recall received" : "Lost link") +
-              " · " + d.id + " returning to the nearest outpost",
-            "warn"
-          );
-          auditEvent("DRONE", "rtl", d.id + " · " + (reserve ? "reserve" : state.recall ? "manual recall" : "lost link"));
-        }
-      }
-
-      d.modeTime += dt;
-      if (d.autonomyMode === "takeoff") {
-        const k = clamp(d.modeTime / CFG.takeoffSeconds, 0, 1);
-        d.pos.y = lerp(gh + 0.15, d.cruiseAlt, k);
-        if (k >= 1) setAutonomyMode(d, "route");
-      } else if (d.autonomyMode === "route" || d.autonomyMode === "survey") {
-        if (d.autonomyMode === "survey") {
-          // Station-keeping sensor sweep, not a navigation pattern.
-          d.heading += dt * 0.42;
-          if (d.modeTime >= CFG.surveySeconds) {
-            d.wpIndex = (d.wpIndex + 1) % d.waypoints.length;
-            d.waypointTime = 0;
-            setAutonomyMode(d, "route");
-          }
-        } else {
-          const wp = d.waypoints[d.wpIndex % d.waypoints.length];
-          let dx = wp.x - d.pos.x, dz = wp.z - d.pos.z;
-          const dist = Math.hypot(dx, dz);
-          if (dist < 0.9 && wp.hold) {
-            d.waypointTime += dt;
-            d.heading += dt * 0.12;
-            if (d.waypointTime >= wp.hold) {
-              d.wpIndex = (d.wpIndex + 1) % d.waypoints.length;
-              d.waypointTime = 0;
-            }
-          } else if (dist < 0.9) {
-            d.waypointTime = 0;
-            if (wp.type === "survey") {
-              d.lastSurveyFeature = wp.featureId || null;
-              setAutonomyMode(d, "survey");
-            } else {
-              d.wpIndex = (d.wpIndex + 1) % d.waypoints.length;
-            }
-          } else {
-            const desired = { x: dx / dist, z: dz / dist };
-            const steered = steerAroundObstacles(d, desired.x, desired.z);
-            d.obstacleState = steered.x !== desired.x || steered.z !== desired.z
-              ? "avoiding structure"
-              : d.pos.y - gh < 1.4 ? "terrain clearance" : "clear";
-            const sl = Math.hypot(steered.x, steered.z) || 1;
-            dx = steered.x / sl; dz = steered.z / sl;
-            const speed = CFG.cruiseSpeed * (d.battery < state.safety.reserve + 10 ? 0.78 : 1);
-            const wind = sit.wind
-              ? { x: sit.wind.x * CFG.windDrift, z: sit.wind.z * CFG.windDrift }
-              : { x: 0, z: 0 };
-            d.pos.x = clampToArena(d.pos.x + (dx * speed + wind.x) * dt);
-            d.pos.z = clampToArena(d.pos.z + (dz * speed + wind.z) * dt);
-            d.windOffset.x += (wind.x - d.windOffset.x) * clamp(dt * 1.2, 0, 1);
-            d.windOffset.z += (wind.z - d.windOffset.z) * clamp(dt * 1.2, 0, 1);
-            d.heading = Math.atan2(dz, dx);
-            d.pos.y = lerp(d.pos.y, Math.max(d.cruiseAlt, gh + 2.2), clamp(dt * 0.8, 0, 1));
-          }
-        }
-      } else if (d.autonomyMode === "rtl" || d.autonomyMode === "landing") {
-        const post = nearestPost(d);
-        const tx = post.x + ((d.idx % 3) - 1) * 1.8;
-        const tz = post.z + ((d.idx % 2) ? 1.8 : -1.8);
-        const dx = tx - d.pos.x, dz = tz - d.pos.z;
-        const dist = Math.hypot(dx, dz);
-        if (dist > 0.8 && d.autonomyMode === "rtl") {
-          const speed = CFG.cruiseSpeed * 1.15;
-          d.pos.x += (dx / dist) * speed * dt;
-          d.pos.z += (dz / dist) * speed * dt;
-          d.heading = Math.atan2(dz, dx);
-          d.pos.y = lerp(d.pos.y, Math.max(gh + 2, d.cruiseAlt * 0.55), clamp(dt, 0, 1));
-        } else {
-          setAutonomyMode(d, "landing");
-          const g = heightAt(d.pos.x, d.pos.z);
-          d.pos.y = Math.max(g + 0.12, d.pos.y - dt * CFG.descentRate);
-          if (d.pos.y <= g + 0.13 && d.modeTime > CFG.landingSeconds * 0.4) {
-            setAutonomyMode(d, "hold");
-            if (!state.recall && !reserve) {
-              // A completed recall can resume the assigned route immediately.
-              d.rtlNotified = false;
-            }
-          }
-        }
-      }
-      d.pos.y = Math.max(d.pos.y, heightAt(d.pos.x, d.pos.z) + 0.12);
-      if (d.autonomyMode !== "landing" && d.autonomyMode !== "hold") {
-        d.battery = Math.max(14, d.battery - dt * CFG.enduranceDrain);
-      }
-    }
+    droneSystem.updateAutonomy(dt, state);
   }
 
   function makeDrones() {
-    const drones = [];
-    for (let i = 0; i < CFG.count; i++) {
-      drones.push({
-        id: "D" + String(i + 1).padStart(2, "0"),
-        identity: "NEXUS-D" + String(i + 1).padStart(3, "0"),
-        trusted: true,
-        safetyMode: "nominal",
-        idx: i,
-        mission: "feature survey",
-        waypoints: [],
-        wpIndex: 0,
-        waypointTime: 0,
-        lastSurveyFeature: null,
-        autonomyMode: "takeoff",
-        modeTime: 0,
-        flightTime: 0,
-        heading: 0,
-        cruiseAlt: 5.4,
-        rtlNotified: false,
-        localQueue: [],
-        deliveryDelay: 0,
-        bufferedObservations: 0,
-        obstacleState: "clear",
-        windOffset: { x: 0, z: 0 },
-        battery: Math.round(rand(72, 97)),
-        phase: rand(0, TAU),
-        failed: false,
-        failedAt: 0,
-        hops: null,
-        connected: false,
-        group: null,
-        leader: false,
-        status: "connected",
-        obsAge: 1,
-        pos: { x: 0, y: 1, z: 0 }
-      });
-    }
-    state.drones = drones;
-    assignMissions();
+    state.drones = droneSystem.createDrones(CFG.count, state.features, state);
   }
 
   /* ---------------- shared environmental map model ---------------- */
@@ -1340,167 +1110,31 @@
   }
 
   function angleBetween(a, b) {
-    return Math.abs(((a - b + Math.PI * 3) % TAU) - Math.PI);
+    return DroneSystemApi.angleBetween(a, b);
   }
 
   function lineOfSightBlocked(d, f) {
-    const groundY = Math.max(heightAt(f.x, f.z), (state.terrain ? state.terrain.waterLevel : 0) * 0.9);
-    const steps = 6;
-    for (let s = 1; s < steps; s++) {
-      const t = s / steps;
-      const x = d.pos.x + (f.x - d.pos.x) * t;
-      const z = d.pos.z + (f.z - d.pos.z) * t;
-      const rayY = d.pos.y + (groundY + 0.35 - d.pos.y) * t;
-      if (heightAt(x, z) > rayY - 0.2) return true;
-      for (const b of state.terrain ? state.terrain.buildings : []) {
-        if (Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2 &&
-            rayY < heightAt(b.x, b.z) + b.h + 0.25) return true;
-      }
-    }
-    return false;
+    return droneSystem.lineOfSightBlocked(d, f, state);
   }
 
   function canObserve(d, f, range, fov) {
-    if (!d || d.failed || !d.trusted) return false;
-    if (d.autonomyMode === "hold" || d.autonomyMode === "landing" || d.autonomyMode === "failed") return false;
-    if (Math.hypot(d.pos.x - f.x, d.pos.z - f.z) > range + f.r * 0.35) return false;
-    const bearing = Math.atan2(f.z - d.pos.z, f.x - d.pos.x);
-    const halfFov = (fov * Math.PI / 180) / 2;
-    if (angleBetween(bearing, d.heading) > halfFov) return false;
-    return !lineOfSightBlocked(d, f);
+    return droneSystem.canObserve(d, f, range, fov, state);
   }
 
   function observationChannel(d) {
-    return d.idx % 5 === 0 ? "bulk" : "telemetry";
+    return droneSystem.observationChannel(d);
   }
 
   function queueObservation(record, source) {
-    const ch = state.channels[record.channel] || state.channels.telemetry;
-    const hops = source.hops === null || source.hops === undefined ? 4 : source.hops;
-    const delay = CFG.mapSyncStep * 0.7 + ch.latency * 4 * (1 + hops * 0.5) + (source.idx % 3) * 0.12;
-    state.pendingObservations.push(Object.assign({}, record, { deliverAt: state.time + delay }));
-    if (state.pendingObservations.length > CFG.maxPending) state.pendingObservations.shift();
+    return droneSystem.queueObservation(record, source, state);
   }
 
   function applyObservation(record) {
-    const f = state.features.find((x) => x.id === record.featureId);
-    if (!f || record.expiresAt <= state.time) {
-      state.stats.expiredObservations++;
-      return;
-    }
-    if (record.epoch !== state.coordination.epoch) {
-      state.stats.staleRejected++;
-      return;
-    }
-    f.observedAt = record.at;
-    f.observers = record.observers.length;
-    f.confidence = record.confidence;
-    f.fused = record.observers.length >= 2;
-    f.sourceDrone = record.source;
-    f.observationId = record.id;
-    f.dataType = record.dataType;
-    state.observations.push(record);
-    if (state.observations.length > CFG.maxObservations) state.observations.shift();
+    return droneSystem.applyObservation(record, state);
   }
 
   function updateMapFeatures(dt) {
-    const sit = currentSituation();
-    const hazardTypes = { fire: true, flood: true, hotspot: true, hazard: true };
-
-    // Physical feature motion happens continuously; shared-map truth is
-    // refreshed only when a routed observation is actually delivered.
-    for (const f of state.features) {
-      if (sit.wind && (f.type === "smoke" || f.type === "fire" || f.type === "hotspot")) {
-        const k = Math.min(6, state.time * 0.05);
-        f.x = clampToArena(f.homeX + sit.wind.x * k);
-        f.z = clampToArena(f.homeZ + sit.wind.z * k);
-      } else if (sit.drift && (f.type === "survivor" || f.type === "vehicle")) {
-        const wave = state.time * 0.11 + f.phase;
-        f.x = clampToArena(f.homeX + Math.cos(wave) * 2.5);
-        f.z = clampToArena(f.homeZ + Math.sin(wave * 0.8) * 2.5);
-      } else {
-        f.x = f.homeX;
-        f.z = f.homeZ;
-      }
-    }
-
-    state.mapSyncAcc += dt * (sit.sync || 1);
-    let syncTick = false;
-    if (state.mapSyncAcc >= CFG.mapSyncStep) {
-      state.mapSyncAcc -= CFG.mapSyncStep;
-      syncTick = true;
-    }
-
-    if (syncTick) {
-      const range = CFG.sensorRange * sit.sensor * (sit.night ? 0.86 : 1);
-      const fov = CFG.sensorFov * (sit.night ? 0.82 : 1);
-      for (const f of state.features) {
-        const observerIds = [];
-        for (const d of state.activeDrones) {
-          if (canObserve(d, f, range, fov)) observerIds.push(d.id);
-        }
-        if (!observerIds.length) continue;
-
-        const source = state.drones.find((d) => d.id === observerIds[0]);
-        if (!source) continue;
-        const channel = observationChannel(source);
-        const confidence = Math.round(clamp(
-          76 + observerIds.length * 7 + (sit.sensor - 0.6) * 18 + Math.sin(f.phase) * 3,
-          55, 99
-        ));
-        const at = Math.round(state.time * 10) / 10;
-        const record = {
-          id: "O" + String(++state.obsSeq).padStart(4, "0"),
-          featureId: f.id,
-          source: source.id,
-          observers: observerIds.slice(),
-          at,
-          x: Math.round(f.x * 10) / 10,
-          z: Math.round(f.z * 10) / 10,
-          confidence,
-          dataType: dataTypeFor(f.type),
-          status: observerIds.length >= 2 ? "confirmed" : "provisional",
-          expiresAt: Math.round((state.time + CFG.observationTtl) * 10) / 10,
-          channel,
-          epoch: state.coordination.epoch
-        };
-        state.stats.observations++;
-        if (source.connected && source.hops !== null) {
-          queueObservation(record, source);
-        } else {
-          source.localQueue.push(record);
-          if (source.localQueue.length > CFG.maxLocalQueue) source.localQueue.shift();
-        }
-      }
-
-      // A restored route flushes the drone's onboard buffer. Records still pay
-      // the channel delay, so reconnection is visible rather than instantaneous.
-      for (const d of state.activeDrones) {
-        if (!d.connected || !d.localQueue.length) continue;
-        const held = d.localQueue.splice(0, d.localQueue.length);
-        for (const record of held) queueObservation(record, d);
-      }
-
-      for (let i = state.pendingObservations.length - 1; i >= 0; i--) {
-        const record = state.pendingObservations[i];
-        if (state.time < record.deliverAt) continue;
-        state.pendingObservations.splice(i, 1);
-        applyObservation(record);
-      }
-    }
-
-    for (const f of state.features) {
-      f.age = Math.max(0, state.time - f.observedAt);
-      f.liveState = f.age <= sit.liveFor ? "live" : f.age <= sit.staleFor ? "stale" : "lost";
-      f.confidence = Math.round(clamp(f.confidence - Math.max(0, f.age - sit.liveFor) * 1.1, 42, 99));
-      f.expiresAt = f.observedAt + CFG.observationTtl;
-      if (sit.spread && hazardTypes[f.type]) {
-        const grow = f.liveState === "live" ? 0.022 : sit.spread;
-        f.r = Math.min(f.baseR * 2.2, f.r + grow * Math.max(dt, 0));
-      } else {
-        f.r = f.baseR;
-      }
-    }
+    droneSystem.updateMapFeatures(dt, state);
   }
 
   /* ---------------- network model ---------------- */
@@ -1509,26 +1143,7 @@
   // signal. Post antennas sit above their pads; aircraft radios sit above the
   // airframe. Launch and landing use the short-range control link instead.
   function radioLineBlocked(a, b, idA, idB) {
-    if (!state.terrain) return false;
-    const postA = idA === "MAIN" || idA === "BKUP";
-    const postB = idB === "MAIN" || idB === "BKUP";
-    if (!postA && a.y < heightAt(a.x, a.z) + 1.5) return false;
-    if (!postB && b.y < heightAt(b.x, b.z) + 1.5) return false;
-    const ay = a.y + (postA ? 3.2 : 0.8);
-    const by = b.y + (postB ? 3.2 : 0.8);
-    const steps = 8;
-    for (let s = 1; s < steps; s++) {
-      const t = s / steps;
-      const x = lerp(a.x, b.x, t), z = lerp(a.z, b.z, t);
-      const rayY = lerp(ay, by, t);
-      if (heightAt(x, z) > rayY - 0.4) return true;
-      for (const building of state.terrain.buildings) {
-        if (Math.abs(x - building.x) < building.w / 2 + 0.3 &&
-            Math.abs(z - building.z) < building.d / 2 + 0.3 &&
-            rayY < heightAt(building.x, building.z) + building.h + 0.3) return true;
-      }
-    }
-    return false;
+    return droneSystem.radioLineBlocked(a, b, idA, idB, state);
   }
 
   function isBlocked(a, b, idA, idB) {
@@ -3119,7 +2734,7 @@
     return {
       app: "NEXUS AI",
       kind: "simulation-run",
-      version: "5.0.0",
+      version: "6.0.0",
       generatedAt: new Date().toISOString(),
       world: {
         halfExtent: WORLD.halfExtent,

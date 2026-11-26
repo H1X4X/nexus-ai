@@ -14,6 +14,7 @@ The site combines the full proposal with a working browser-based simulation: a 7
 - **Reproducible runs** — seeded scenarios with shareable links, JSON/CSV export and a captioned PNG snapshot of the current view.
 - **Shared environmental map** — 8 doubled battlefield maps with terrain, water, forests, warehouse and apartment buildings, roads, 4 situations, and live/stale/lost feature freshness.
 - **Mission-driven fleet** — waypoint routes, heading- and line-of-sight-aware sensing, obstacle avoidance, wind drift, takeoff/cruise/survey/RTL/landing modes and battery-aware decisions.
+- **Reusable drone system** — [`assets/drone-system.js`](assets/drone-system.js) is the complete dependency-free drone codebase: task queues, mission planning, navigation, autonomy state machine, sensing, observation routing, faults and fleet summaries. The live command center delegates to this module.
 - **14 simulated nodes** — 12 drones plus two fixed operator outposts, MAIN at the map start and BACKUP at the far end.
 - **Distributed architecture state** — live heartbeats, lease, term/epoch, quorum, split-brain guard, channel load, safety posture, identity/trust and signed audit events.
 - **Telemetry history** — a rolling 60-second sparkline of connected drones, buffered records and packet rate; included in exported runs.
@@ -38,6 +39,32 @@ npm run verify         # syntax check + static wiring tests + simulation tests
 ```
 
 Individual commands are `npm run check` (syntax) and `npm test` (Node's built-in test runner; no dependencies to install).
+
+## Drone system module
+
+`assets/drone-system.js` can be used on its own in any browser or Node project. It is a classic script/UMD module with no DOM, network or library dependencies. In a browser it exposes `window.NexusDroneSystem`; in Node, `require()`/`import` plus `globalThis.NexusDroneSystem` both work.
+
+```js
+const system = NexusDroneSystem.createDroneSystem({
+  config: NexusDroneSystem.DEFAULT_CONFIG,
+  posts: NexusDroneSystem.DEFAULT_POSTS,
+  random: () => 0.42,
+  heightAt: () => 0,
+  situation: () => ({ sensor: 1, liveFor: 7, staleFor: 16 }),
+  log: console.log,
+  audit: console.log
+});
+
+const state = { time: 0, drones: [], features: [], activeDrones: [] };
+const drones = system.createDrones(12, features, state);
+
+// Each frame:
+state.time += dt;
+system.updateAutonomy(dt, state);
+system.updateMapFeatures(dt, state);
+```
+
+The full API is documented in [`docs/DRONE_SYSTEM.md`](docs/DRONE_SYSTEM.md). Tests for the standalone module live in `tests/drone-system.test.mjs`.
 
 ## Simulator controls
 

@@ -38,6 +38,8 @@ Radio links use elevated post antennas and airborne relay altitudes; the mesh ch
 
 This is a physical simulation, not a flight controller: speeds, climb rates, sensor geometry and endurance are simplified but consistent across the map.
 
+All drone behaviour lives in the standalone `assets/drone-system.js` module. It owns mission/task queues, waypoint navigation, battery-aware autonomy transitions, local obstacle and line-of-sight sensing, delayed observation routing, fault helpers and export-ready fleet summaries. `assets/app.js` supplies world callbacks and delegates to the same implementation used by `tests/drone-system.test.mjs`. The complete API and state contract are documented in [`docs/DRONE_SYSTEM.md`](DRONE_SYSTEM.md).
+
 ## 2. Coordinator failover without split-brain
 
 A backup must not take control simply because one heartbeat was missed. The Main AI could still be healthy while its link to the backup is interrupted.
