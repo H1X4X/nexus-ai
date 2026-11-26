@@ -152,7 +152,7 @@ test("v5 physical world and mission hooks are present", () => {
   for (const token of [
     "const WORLD =", "AUTONOMY_MODES", "missionPlanFor", "assignMissions",
     "updateAutonomy", "lineOfSightBlocked", "radioLineBlocked", "queueObservation", "pendingObservations",
-    "obstacleState", "sensorFov", "cruiseSpeed", "windDrift"
+    "obstacleState", "sensorFov", "cruiseSpeed", "windDrift", "warehouse", "apartment"
   ]) {
     assert.ok(js.includes(token), `app.js missing v5 token ${token}`);
   }

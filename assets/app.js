@@ -100,6 +100,14 @@
     bridge: {
       wall: 0x5d7180, roof: 0x405565, win: 0x9fe8ff, trim: 0xb9d4e4,
       wall2: "rgba(93,113,128,0.94)", roof2: "rgba(64,85,101,0.96)", win2: "rgba(159,232,255,0.85)"
+    },
+    warehouse: {
+      wall: 0xb8ada2, roof: 0x8f9aa3, win: 0xffd9a0, trim: 0xd8d2c8,
+      wall2: "rgba(184,173,162,0.94)", roof2: "rgba(143,154,163,0.96)", win2: "rgba(255,217,160,0.95)"
+    },
+    apartment: {
+      wall: 0xd7dce0, roof: 0x8e979d, win: 0x8fc6dc, trim: 0xbfc7cd,
+      wall2: "rgba(215,220,224,0.94)", roof2: "rgba(142,151,157,0.96)", win2: "rgba(143,198,220,0.95)"
     }
   };
   const styleFor = (type) => BUILDING_STYLES[type] || BUILDING_STYLES.house;
@@ -596,10 +604,10 @@
       sparse: 0.03,
       roads: [[[-19, -6], [19, -6]], [[-6, 19], [-6, -19]]],
       buildings: [
-        { x: -10, z: -7, w: 3.2, d: 2.4, h: 1.5, type: "plant" },
-        { x: 7, z: -9.5, w: 3.6, d: 2.6, h: 1.8, type: "plant" },
-        { x: -7, z: 7.5, w: 3.0, d: 2.2, h: 1.3, type: "plant" },
-        { x: 9.5, z: 9.0, w: 3.4, d: 2.4, h: 1.6, type: "plant" },
+        { x: -10, z: -7, w: 3.2, d: 2.4, h: 1.5, type: "warehouse" },
+        { x: 7, z: -9.5, w: 3.6, d: 2.6, h: 1.8, type: "warehouse" },
+        { x: -7, z: 7.5, w: 3.0, d: 2.2, h: 1.3, type: "warehouse" },
+        { x: 9.5, z: 9.0, w: 3.4, d: 2.4, h: 1.6, type: "warehouse" },
         { x: 0.0, z: 0.0, w: 1.2, d: 1.2, h: 2.4, type: "tower" },
         { x: -14.5, z: 0.0, w: 2.0, d: 1.6, h: 1.1, type: "tank" },
         { x: 14.5, z: 0.0, w: 2.0, d: 1.6, h: 1.1, type: "tank" }
@@ -616,15 +624,15 @@
       sparse: 0.02,
       roads: [[[-19, -6], [19, -6]], [[-19, 6], [19, 6]], [[-6, -19], [-6, 19]], [[6, -19], [6, 19]]],
       buildings: [
-        { x: -12, z: -12, w: 3.4, d: 3.2, h: 2.4, type: "plant" },
-        { x: -12, z: 0, w: 3.4, d: 3.2, h: 3.0, type: "plant" },
-        { x: -12, z: 12, w: 3.4, d: 3.2, h: 2.6, type: "plant" },
-        { x: 0, z: -12, w: 3.4, d: 3.2, h: 2.2, type: "plant" },
-        { x: 0, z: 12, w: 3.4, d: 3.2, h: 2.8, type: "plant" },
-        { x: 12, z: -12, w: 3.4, d: 3.2, h: 3.0, type: "plant" },
-        { x: 12, z: 0, w: 3.4, d: 3.2, h: 2.4, type: "plant" },
-        { x: 12, z: 12, w: 3.4, d: 3.2, h: 2.6, type: "plant" },
-        { x: -11.2, z: 9.2, w: 2.8, d: 2.6, h: 1.6, type: "house" }
+        { x: -12, z: -12, w: 3.4, d: 3.2, h: 2.4, type: "apartment" },
+        { x: -12, z: 0, w: 3.4, d: 3.2, h: 3.0, type: "apartment" },
+        { x: -12, z: 12, w: 3.4, d: 3.2, h: 2.6, type: "apartment" },
+        { x: 0, z: -12, w: 3.4, d: 3.2, h: 2.2, type: "apartment" },
+        { x: 0, z: 12, w: 3.4, d: 3.2, h: 2.8, type: "apartment" },
+        { x: 12, z: -12, w: 3.4, d: 3.2, h: 3.0, type: "apartment" },
+        { x: 12, z: 0, w: 3.4, d: 3.2, h: 2.4, type: "apartment" },
+        { x: 12, z: 12, w: 3.4, d: 3.2, h: 2.6, type: "apartment" },
+        { x: -11.2, z: 9.2, w: 2.8, d: 2.6, h: 1.6, type: "apartment" }
       ]
     },
     mountain: {
@@ -5167,6 +5175,8 @@
     const brickMat = std({ map: T.tex.brick, color: 0xb9a49c, roughness: 0.9 });
     const concreteMat = std({ map: T.tex.concrete, color: 0x4a565e, roughness: 0.92 });
     const darkMat = std({ map: T.tex.concrete, color: 0x333e46, roughness: 0.9 });
+    const warehouseMat = std({ map: T.tex.brick, color: 0xb9a49c, roughness: 0.9 });
+    const apartmentMat = std({ map: T.tex.stucco, color: 0xd8dee2, roughness: 0.9 });
     const glassMat = new THREE.MeshPhongMaterial({
       color: 0x8fc6dc, specular: 0xffffff, shininess: 140,
       envMap: T.envCube, reflectivity: 0.7,
@@ -5236,6 +5246,26 @@
         }
         for (const xx of [-b.w / 2 + 0.3, b.w / 2 - 0.3]) {
           addPart(g, new THREE.BoxGeometry(0.34, b.h, 0.34), concreteMat, xx, b.h / 2, 0);
+        }
+      } else if (b.type === "warehouse") {
+        addPart(g, new THREE.BoxGeometry(b.w, b.h, b.d), warehouseMat, 0, b.h / 2 + 0.15, 0);
+        addPart(g, new THREE.BoxGeometry(b.w + 0.2, 0.14, b.d + 0.2), metalMat, 0, b.h + 0.17, 0);
+        addPart(g, new THREE.BoxGeometry(b.w * 0.24, b.h * 0.56, 0.08), darkMat, 0, b.h * 0.28, b.d / 2 + 0.02);
+        for (let wy = b.h * 0.36; wy < b.h * 0.9; wy += b.h * 0.14) {
+          addWindow(g, 0, wy, b.d / 2 + 0.04, b.w * 0.82, b.h * 0.07, p.win);
+        }
+        for (let wz = b.h * 0.36; wz < b.h * 0.9; wz += b.h * 0.14) {
+          addWindow(g, 0, wz, -b.d / 2 - 0.04, b.w * 0.82, b.h * 0.07, p.win);
+        }
+      } else if (b.type === "apartment") {
+        addPart(g, new THREE.BoxGeometry(b.w, b.h, b.d), apartmentMat, 0, b.h / 2 + 0.15, 0);
+        addPart(g, new THREE.BoxGeometry(b.w + 0.2, 0.14, b.d + 0.2), concreteMat, 0, b.h + 0.17, 0);
+        addPart(g, new THREE.BoxGeometry(b.w * 0.24, b.h * 0.56, 0.08), darkMat, 0, b.h * 0.28, b.d / 2 + 0.02);
+        for (let wy = b.h * 0.34; wy < b.h * 0.88; wy += b.h * 0.14) {
+          addWindow(g, 0, wy, b.d / 2 + 0.04, b.w * 0.8, b.h * 0.07, p.win);
+        }
+        for (let wz = b.h * 0.34; wz < b.h * 0.88; wz += b.h * 0.14) {
+          addWindow(g, 0, wz, -b.d / 2 - 0.04, b.w * 0.8, b.h * 0.07, p.win);
         }
       } else if (b.type === "plant") {
         addPart(g, new THREE.BoxGeometry(b.w, b.h, b.d), walls.plant, 0, b.h / 2 + 0.15, 0);

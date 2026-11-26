@@ -136,6 +136,18 @@ test("world descriptor drives a doubled arena and opposite ground posts", () => 
   assert.equal(summary.world.posts.main.x, app.MAIN_POS.x);
 });
 
+test("industrial and urban building archetypes are physical", () => {
+  for (const [mapId, expected] of [["industrial", "warehouse"], ["urban", "apartment"]]) {
+    app.state.mapId = mapId;
+    app.state.time = 0;
+    app.state.recall = false;
+    app.setSeed(42);
+    app.buildTerrain(mapId);
+    const types = app.state.terrain.buildings.map((b) => b.type);
+    assert.ok(types.includes(expected), `${mapId} should use ${expected} buildings, got ${types.join(",")}`);
+  }
+});
+
 test("drones receive real waypoint missions and fly them with flight modes", () => {
   app.state.recall = false;
   app.state.time = 0;

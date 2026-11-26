@@ -25,7 +25,7 @@ The Main and Backup posts are fixed ground stations at opposite ends of the moni
 
 ## 1a. Physical world and mission execution
 
-The live simulator models a 78×78-unit area, twice the earlier arena, while keeping the same twelve aircraft. Terrain, roads, buildings, vegetation, feature positions and the two operator posts all derive from one world descriptor, so the 2D view, 3D view, radio ranges and mission routes agree.
+The live simulator models a 78×78-unit area, twice the earlier arena, while keeping the same twelve aircraft. Terrain, roads, buildings, vegetation, feature positions and the two operator posts all derive from one world descriptor, so the 2D view, 3D view, radio ranges and mission routes agree. Industrial yards and warehouse clusters and urban apartment blocks use dedicated building facades; the shared world descriptor keeps those archetypes consistent across 2D, 3D, radio and mission layers.
 
 Drones are no longer placed on circular orbits. Each receives a deterministic mission:
 
