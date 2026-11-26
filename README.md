@@ -4,7 +4,7 @@ An interactive engineering proposal and live 3D command center for a self-healin
 
 **Live site:** https://h1x4x.github.io/nexus-ai/
 
-The site combines the full proposal with a working browser-based simulation: 12 drones, a Main AI, a Backup AI, mesh routing, coordinator failover, link and drone failures, buffered records, and a shared map that distinguishes live data from stale data.
+The site combines the full proposal with a working browser-based simulation: 12 drones, fixed Main and Backup operator outposts, mesh routing, split-brain-safe coordinator failover, three communication channels, link and drone failures, buffered records, and a shared map that distinguishes live data from stale data.
 
 ## What is inside
 
@@ -13,9 +13,12 @@ The site combines the full proposal with a working browser-based simulation: 12 
 - **Focus mode** — hide the proposal and expand the simulator to a near full-screen command console, with one button or the `F` key.
 - **Reproducible runs** — seeded scenarios with shareable links, JSON/CSV export and a captioned PNG snapshot of the current view.
 - **Shared environmental map** — 8 battlefield maps with terrain, water, forests, buildings and roads, 4 situations, and live/stale/lost feature freshness.
-- **14 simulated nodes** — 12 drones plus Main AI and Backup AI.
+- **14 simulated nodes** — 12 drones plus two fixed operator outposts, MAIN at the map start and BACKUP at the far end.
+- **Distributed architecture state** — live heartbeats, lease, term/epoch, quorum, split-brain guard, channel load, safety posture, identity/trust and signed audit events.
 - **Telemetry history** — a rolling 60-second sparkline of connected drones, buffered records and packet rate; included in exported runs.
 - **Self-contained assets** — no external fonts, trackers, or runtime data requests. The 3D map vendors Three.js r128 locally under `assets/vendor/` (loaded as a classic script, no CDN).
+
+The stronger engineering interpretation of the project — AI responsibility levels, split-brain-safe coordination, three communication channels, observation records and sensor fusion, independent safety, zero-trust security, privacy by design, measurable targets and a staged roadmap — is documented in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The simulator now exposes the main ideas as a live **Architecture** panel with heartbeats, leases, epochs, quorum, channel health, safety posture, identity/trust and audit events.
 
 ## Run locally
 

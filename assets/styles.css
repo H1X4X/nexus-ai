@@ -2592,6 +2592,76 @@ html.js-anim .reveal.is-visible { opacity: 1; transform: none; }
   text-overflow: ellipsis;
 }
 
+/* ---------- live architecture state ---------- */
+
+.arch-strip {
+  padding: 8px 14px 9px;
+  border-top: 1px solid var(--line);
+  background: rgba(8, 20, 32, 0.78);
+}
+.arch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+.arch-head .mono {
+  color: var(--faint);
+  font-size: 0.52rem;
+  letter-spacing: 0.11em;
+}
+.arch-head .status-tag { padding: 2px 7px; font-size: 0.5rem; }
+.arch-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px 14px;
+}
+.arch-cell { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.arch-cell > span {
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.arch-cell b {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.arch-cell b.ok { color: var(--green); }
+.arch-cell b.warn { color: var(--amber); }
+.arch-cell b.bad { color: var(--red); }
+.arch-audit {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 7px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+.arch-audit .mono {
+  flex: none;
+  color: var(--faint);
+  font-size: 0.5rem;
+  letter-spacing: 0.1em;
+}
+.arch-audit > span:last-child {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ---------- layers ---------- */
 
 .layer-bar {
@@ -2959,6 +3029,7 @@ kbd {
   .supervision-row { border-bottom: 1px solid rgba(120, 190, 220, 0.09); padding-bottom: 10px; }
   .supervision-row:last-child { border-bottom: 0; }
   .metric-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .arch-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .metric:nth-child(3) { border-right: 0; }
   .metric:nth-child(-n + 3) { border-bottom: 1px solid var(--line); }
 }

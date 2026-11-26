@@ -425,13 +425,14 @@
           <article class="layer-panel is-active" id="layer-panel-1" role="tabpanel" aria-labelledby="layer-tab-1">
             <div class="panel-topline"><span class="mono">3.1 — EDGE INTELLIGENCE</span><span class="status-tag">ONBOARD</span></div>
             <h3>Individual AI drones</h3>
-            <p class="layer-summary">Each drone is an intelligent network member rather than a simple remote-controlled device. Its onboard AI processes camera and sensor information, monitors battery and hardware status, keeps local records and exchanges what matters with authorised members.</p>
+            <p class="layer-summary">Each drone is an intelligent network member rather than a simple remote-controlled device. Its onboard AI processes camera and sensor information, monitors battery and hardware status, keeps local records and exchanges what matters with authorised members. A separate onboard safety layer can never be overridden by the general AI.</p>
             <ul class="check-list">
               <li>Local processing of camera and sensor observations.</li>
               <li>Health monitoring for battery, hardware and communication status.</li>
               <li>Local storage for observations that cannot be synchronised immediately.</li>
               <li>Communication with nearby members using approved protocols.</li>
-              <li>Predefined safe behaviour when operator or network connectivity is lost.</li>
+              <li>Independent geofencing, battery reserve, collision avoidance and safe lost-link behaviour.</li>
+              <li>Structured observations carrying source identity, timestamp, confidence, data type and expiration.</li>
               <li>Synchronisation of buffered observations when a valid connection returns.</li>
             </ul>
             <div class="panel-meta"><span><svg class="icon"><use href="#i-battery" /></svg>Autonomy-first</span><span><svg class="icon"><use href="#i-database" /></svg>Store &amp; forward</span><span><svg class="icon"><use href="#i-shield" /></svg>Safe by default</span></div>
@@ -439,13 +440,14 @@
           <article class="layer-panel" id="layer-panel-2" role="tabpanel" aria-labelledby="layer-tab-2" hidden>
             <div class="panel-topline"><span class="mono">3.2 — MESH SYSTEM</span><span class="status-tag">SELF-FORMING</span></div>
             <h3>A network that routes around damage</h3>
-            <p class="layer-summary">Drones form wireless links with neighbours and move messages across multiple hops. When a direct path disappears, the mesh looks for another authenticated route — or stores the message until one becomes available.</p>
+            <p class="layer-summary">Drones form wireless links with neighbours and move messages across multiple hops. Traffic is separated into safety/control, telemetry/coordination and bulk data so large transfers cannot delay a command. When a direct path disappears, the mesh finds another authenticated route or stores the message until one becomes available.</p>
             <ul class="check-list">
               <li>Self-forming topology with no fixed infrastructure required.</li>
               <li>Multi-hop routing that avoids failed nodes and blocked sectors.</li>
               <li>Store-and-forward buffering for intermittent connectivity.</li>
               <li>Continuous link-quality monitoring and neighbour discovery.</li>
-              <li>Authenticated, encrypted device-to-device communication.</li>
+              <li>Authenticated, encrypted device-to-device communication with three priority classes.</li>
+              <li>Store-and-forward replay with source, timestamp and freshness checks.</li>
               <li>Graceful partition and reconnection instead of network-wide failure.</li>
             </ul>
             <div class="panel-meta"><span><svg class="icon"><use href="#i-route" /></svg>Multi-hop</span><span><svg class="icon"><use href="#i-signal" /></svg>Link-aware</span><span><svg class="icon"><use href="#i-link" /></svg>Self-healing</span></div>
@@ -453,28 +455,30 @@
           <article class="layer-panel" id="layer-panel-3" role="tabpanel" aria-labelledby="layer-tab-3" hidden>
             <div class="panel-topline"><span class="mono">3.3 — DYNAMIC COORDINATION</span><span class="status-tag">FAULT-TOLERANT</span></div>
             <h3>Central, backup and local</h3>
-            <p class="layer-summary">A Main AI maintains shared state while a Backup AI keeps a ready replica. If a group loses its central path, the group elects a temporary local coordinator and keeps operating until reconnection.</p>
+            <p class="layer-summary">A Main AI maintains shared state while a Backup AI keeps a ready replica. Promotion is split-brain safe: leases, epochs, quorum evidence and command sequencing decide who may lead. If a group loses its central path, it elects a temporary local coordinator.</p>
             <ul class="check-list">
               <li>Main AI owns the shared operational view and global tasking.</li>
               <li>Backup AI replicates coordinator state and monitors readiness.</li>
-              <li>Controlled handover after a health check — never a race for leadership.</li>
+              <li>Heartbeats and leader leases with a fixed validity window.</li>
+              <li>Epoch and sequence checks so stale commands are rejected.</li>
+              <li>Backup promotion only after lease expiry and quorum confirmation.</li>
               <li>Temporary local coordinators elected inside separated groups.</li>
-              <li>Conflict resolution using timestamps, source identity and version data.</li>
-              <li>Split-brain prevention and a complete, auditable decision trail.</li>
+              <li>Sensor fusion of independent observations with conflict preserved for review.</li>
             </ul>
             <div class="panel-meta"><span><svg class="icon"><use href="#i-brain" /></svg>Shared state</span><span><svg class="icon"><use href="#i-shield" /></svg>Handover</span><span><svg class="icon"><use href="#i-users" /></svg>Local leaders</span></div>
           </article>
           <article class="layer-panel" id="layer-panel-4" role="tabpanel" aria-labelledby="layer-tab-4" hidden>
             <div class="panel-topline"><span class="mono">3.4 — ADMIN INTERFACE</span><span class="status-tag">HUMAN-LED</span></div>
             <h3>One view for the human in charge</h3>
-            <p class="layer-summary">The remote administrator sees the fleet as a connected system: live positions, observation freshness, network health and alerts in one place. Important mission decisions stay in human hands.</p>
+            <p class="layer-summary">The remote administrator sees the fleet as a connected system: live positions, observation freshness, network health and alerts in one place. Access follows zero trust, privacy is built into data handling, and important mission decisions stay in human hands.</p>
             <ul class="check-list">
               <li>Live map of drone positions, observations and network status.</li>
               <li>Health, battery, connectivity and freshness indicators.</li>
               <li>Clear separation between confirmed, delayed and stale information.</li>
               <li>Authorised mission planning with explicit approvals.</li>
-              <li>Alert review, event history and complete audit logs.</li>
-              <li>Role-based access for operators, supervisors and maintainers.</li>
+              <li>Unique device identities, signed updates and the ability to isolate a node.</li>
+              <li>Onboard processing, minimal payloads and retention limits for sensitive data.</li>
+              <li>Alert review, event history and tamper-evident audit logs.</li>
             </ul>
             <div class="panel-meta"><span><svg class="icon"><use href="#i-map" /></svg>Unified map</span><span><svg class="icon"><use href="#i-eye" /></svg>Explainable</span><span><svg class="icon"><use href="#i-lock" /></svg>Auditable</span></div>
           </article>
@@ -609,6 +613,7 @@
               <div class="fault-group">
                 <p class="fault-group-label">Fleet</p>
                 <button type="button" class="fault-button" data-action="failDrone"><svg class="icon"><use href="#i-drone" /></svg><span>Fail a drone</span></button>
+                <button type="button" class="fault-button" data-action="isolate"><svg class="icon"><use href="#i-lock" /></svg><span>Isolate selected drone</span></button>
                 <button type="button" class="fault-button" data-action="recall"><svg class="icon"><use href="#i-target" /></svg><span>Safe recall all</span></button>
               </div>
               <button type="button" class="btn btn-restore" data-action="restore"><svg class="icon"><use href="#i-reset" /></svg>Restore everything</button>
@@ -665,6 +670,23 @@
               <div class="metric"><span>Shared map</span><strong id="m-shared">179</strong><small>records</small></div>
               <div class="metric"><span>Freshest obs.</span><strong id="m-fresh">1s</strong><small>observation age</small></div>
             </div>
+            <div class="arch-strip" aria-label="Live distributed architecture state">
+              <div class="arch-head">
+                <span class="mono">DISTRIBUTED ARCHITECTURE · LIVE STATE</span>
+                <span class="status-tag ok" id="arch-status">GUARDED</span>
+              </div>
+              <div class="arch-grid">
+                <div class="arch-cell"><span>Responsibility</span><b id="arch-levels">drone · group · network · human</b></div>
+                <div class="arch-cell"><span>Authority</span><b id="arch-authority">MAIN · term 1 · epoch 1</b></div>
+                <div class="arch-cell"><span>Heartbeats</span><b id="arch-heartbeats">MAIN 0.0s · BKUP 0.0s</b></div>
+                <div class="arch-cell"><span>Lease / quorum</span><b id="arch-lease">2.5s left · 0/5 witnesses</b></div>
+                <div class="arch-cell"><span>Split-brain guard</span><b id="arch-guard">armed · epochs enforced</b></div>
+                <div class="arch-cell"><span>Three channels</span><b id="arch-channels">S 0/20ms · T 0/80ms · B 0/240ms</b></div>
+                <div class="arch-cell"><span>Safety layer</span><b id="arch-safety">geofence · reserve 25%</b></div>
+                <div class="arch-cell"><span>Identity / privacy</span><b id="arch-trust">12/12 verified · onboard</b></div>
+              </div>
+              <div class="arch-audit"><span class="mono">TAMPER-EVIDENT AUDIT</span><span id="arch-audit">no signed events yet</span></div>
+            </div>
             <div class="layer-bar" aria-label="Map layers">
               <span class="layer-bar-label">MAP LAYERS</span>
               <label class="layer-toggle"><input type="checkbox" data-layer="links" checked /><span></span>Mesh links</label>
@@ -711,7 +733,7 @@
 
       <div class="scenario-notes reveal">
         <div class="note"><span class="note-num">01</span><p><strong>Cut the mesh.</strong> The eastern drones lose the central path, elect a temporary local coordinator and buffer observations. Clear the fault to watch reconciliation.</p></div>
-        <div class="note"><span class="note-num">02</span><p><strong>Fail the Main AI.</strong> After a controlled health check, the Backup takes over. No competing leaders, no lost state.</p></div>
+        <div class="note"><span class="note-num">02</span><p><strong>Fail the Main AI.</strong> Watch the lease expire, quorum form and the Backup take over in a new epoch. Old-epoch packets are rejected; an ambiguous heartbeat blocks promotion.</p></div>
         <div class="note"><span class="note-num">03</span><p><strong>Lose a drone.</strong> Switch to the command center and click any node. Stale observations keep their last known position, clearly marked with their age.</p></div>
         <div class="note"><span class="note-num">04</span><p><strong>Comms blackout.</strong> Interference, a storm partition and a lost drone arrive together. Watch the telemetry history show connectivity drop and buffered records climb before the mesh recovers.</p></div>
       </div>

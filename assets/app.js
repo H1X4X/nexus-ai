@@ -103,6 +103,11 @@
     }
   };
   const styleFor = (type) => BUILDING_STYLES[type] || BUILDING_STYLES.house;
+  const dataTypeFor = (type) =>
+    type === "fire" || type === "hotspot" ? "thermal"
+      : type === "flood" || type === "water" ? "depth"
+        : type === "survivor" || type === "vehicle" ? "optical"
+          : "terrain";
 
   const CFG = {
     count: 12,
@@ -115,7 +120,38 @@
     recordStep: 3.2,
     sensorRange: 7.4,
     mapSyncStep: 2.5,
-    maxLog: 42
+    maxLog: 42,
+    leaseSeconds: 2.5,
+    quorumNeeded: 5,
+    batteryReserve: 25,
+    observationTtl: 30,
+    maxObservations: 60
+  };
+
+  // The four responsibility levels described in docs/ARCHITECTURE.md. Local
+  // safety never depends on a higher level being reachable.
+  const AI_LEVELS = [
+    { id: "drone", label: "Drone AI", role: "perception · navigation · local safety" },
+    { id: "group", label: "Group AI", role: "local coordination · relay" },
+    { id: "network", label: "Network AI", role: "shared picture · mission intent" },
+    { id: "human", label: "Human administrator", role: "approval · supervision · override" }
+  ];
+
+  // Three logically separate traffic classes. Bulk traffic must never delay
+  // safety/control messages; the simulator colours packets by channel.
+  const COMM_CHANNELS = [
+    { id: "safety", label: "Safety / control", priority: "highest", color: "#fbbf24" },
+    { id: "telemetry", label: "Telemetry / coordination", priority: "medium", color: "#67e8f9" },
+    { id: "bulk", label: "Bulk data", priority: "lowest", color: "#a78bfa" }
+  ];
+
+  // Proposed prototype goals, mirrored in docs/ARCHITECTURE.md.
+  const PERF_TARGETS = {
+    initialDrones: 5,
+    scaleDrones: 50,
+    statusSeconds: 2,
+    failoverSeconds: 5,
+    reconnectSync: true
   };
 
   // Fixed ground command posts: MAIN at the map start, BKUP at the far end.
@@ -771,7 +807,41 @@
     drillActive: false,
     drillTimers: [],
     log: [],
+    audit: [],
+    observations: [],
+    obsSeq: 0,
+    auditSeq: 0,
     stats: { packets: 0, failovers: 0, reconciliations: 0 },
+    coordination: {
+      term: 1,
+      epoch: 1,
+      heartbeats: { MAIN: 0, BKUP: 0 },
+      lease: CFG.leaseSeconds,
+      quorum: 0,
+      rejected: 0,
+      commandSeq: 0,
+      splitBrainRisk: false,
+      guardNotified: false,
+      lastTransition: 0
+    },
+    channels: {
+      safety: { label: "Safety / control", load: 0, delivered: 0, latency: 0.02 },
+      telemetry: { label: "Telemetry / coordination", load: 0, delivered: 0, latency: 0.08 },
+      bulk: { label: "Bulk data", load: 0, delivered: 0, latency: 0.24 }
+    },
+    safety: {
+      geofence: true,
+      reserve: CFG.batteryReserve,
+      emergencyLandings: 0,
+      rtlEvents: 0,
+      manualOverrides: 0,
+      isolated: []
+    },
+    privacy: {
+      onboardProcessing: true,
+      minimalPayload: true,
+      retentionSeconds: 300
+    },
     history: [],
     historyAcc: 0,
     historyPackets: 0,
@@ -851,6 +921,9 @@
       const baseY = outer ? 5.1 + (i % 3) * 0.55 : 4.4 + (i % 4) * 0.5;
       drones.push({
         id: "D" + String(i + 1).padStart(2, "0"),
+        identity: "NEXUS-D" + String(i + 1).padStart(3, "0"),
+        trusted: true,
+        safetyMode: "nominal",
         idx: i,
         baseAngle,
         baseRadius,
@@ -913,7 +986,12 @@
       age: 0,
       confidence: 96,
       observers: 0,
-      liveState: "live"
+      liveState: "live",
+      sourceDrone: null,
+      dataType: dataTypeFor(def.type),
+      fused: false,
+      expiresAt: CFG.observationTtl,
+      observationId: null
     }));
     state.featureSignature = "";
     // Build terrain AFTER features so the 3D feature markers match this map.
@@ -950,16 +1028,45 @@
         f.z = f.homeZ;
       }
 
-      let observers = 0;
+      const observerIds = [];
       for (const d of state.activeDrones) {
-        if (!d.connected) continue;
-        if (Math.hypot(d.pos.x - f.x, d.pos.z - f.z) <= range + f.r * 0.25) observers++;
+        if (!d.connected || !d.trusted) continue;
+        if (Math.hypot(d.pos.x - f.x, d.pos.z - f.z) <= range + f.r * 0.25) observerIds.push(d.id);
       }
+      const observers = observerIds.length;
       if (observers && syncTick) f.observedAt = state.time;
       f.observers = observers;
       f.age = Math.max(0, state.time - f.observedAt);
-      f.confidence = Math.round(clamp(99 - f.age * 3.2, 42, 99));
+      const fused = observers >= 2;
+      f.confidence = Math.round(clamp((fused ? 88 + observers * 3 : 99 - f.age * 3.2) - nextRandom() * 2, 42, 99));
       f.liveState = f.age <= sit.liveFor ? "live" : f.age <= sit.staleFor ? "stale" : "lost";
+      f.fused = fused;
+      f.dataType = dataTypeFor(f.type);
+      f.expiresAt = f.observedAt + CFG.observationTtl;
+
+      if (observers && syncTick) {
+        // One structured observation per sync tick for this feature. Multiple
+        // independent observers raise confidence through simple sensor fusion.
+        const source = observerIds[Math.floor(nextRandom() * observerIds.length)];
+        const status = f.liveState === "live" ? "confirmed" : f.liveState === "stale" ? "estimated" : "historical";
+        const observationId = "O" + String(++state.obsSeq).padStart(4, "0");
+        f.sourceDrone = source;
+        f.observationId = observationId;
+        state.observations.push({
+          id: observationId,
+          featureId: f.id,
+          source,
+          observers: observerIds.slice(),
+          at: Math.round(state.time * 10) / 10,
+          x: Math.round(f.x * 10) / 10,
+          z: Math.round(f.z * 10) / 10,
+          confidence: f.confidence,
+          dataType: f.dataType,
+          status,
+          expiresAt: Math.round((state.time + CFG.observationTtl) * 10) / 10
+        });
+        if (state.observations.length > CFG.maxObservations) state.observations.shift();
+      }
 
       if (sit.spread && hazardTypes[f.type]) {
         const grow = f.liveState === "live" ? 0.022 : sit.spread;
@@ -998,6 +1105,7 @@
     pos.set("BKUP", BKUP_POS);
 
     const activeDrones = state.drones.filter((d) => !d.failed);
+    const trustedDrones = activeDrones.filter((d) => d.trusted);
     activeDrones.forEach((d) => pos.set(d.id, d.pos));
 
     const nodes = [];
@@ -1011,21 +1119,21 @@
       edges.push({ a, b, kind });
     };
 
-    for (let i = 0; i < activeDrones.length; i++) {
-      for (let j = i + 1; j < activeDrones.length; j++) {
-        const a = activeDrones[i];
-        const b = activeDrones[j];
+    for (let i = 0; i < trustedDrones.length; i++) {
+      for (let j = i + 1; j < trustedDrones.length; j++) {
+        const a = trustedDrones[i];
+        const b = trustedDrones[j];
         if (dist3(a.pos, b.pos) <= CFG.droneRange) pushEdge(a.id, b.id, "mesh");
       }
     }
 
     if (state.main.active) {
-      for (const d of activeDrones) {
+      for (const d of trustedDrones) {
         if (dist3(MAIN_POS, d.pos) <= CFG.mainRange) pushEdge("MAIN", d.id, "main");
       }
     }
     if (state.backup.active) {
-      for (const d of activeDrones) {
+      for (const d of trustedDrones) {
         if (dist3(BKUP_POS, d.pos) <= CFG.backupRange) pushEdge("BKUP", d.id, "backup");
       }
     }
@@ -1128,11 +1236,51 @@
       const db = state.drones.find((d) => d.id === e.b);
       e.tree = treeKeys.has(pairKey(e.a, e.b));
       e.local = !!(da && db && da.group && da.group === db.group);
+      e.channel = e.kind === "main" || e.kind === "backup" ? "safety" : "telemetry";
       e.hops = Math.max(
         hops.has(e.a) ? hops.get(e.a) : 0,
         hops.has(e.b) ? hops.get(e.b) : 0
       );
     }
+
+    // Quorum is the number of trusted drones that can reach the backup post by
+    // any valid route, not just a direct link. Promotion is blocked until enough
+    // witnesses agree. Interference in the main post's vicinity makes its loss
+    // ambiguous: drones may still hold a valid residual path, so the guard
+    // refuses to create two leaders.
+    const coord = state.coordination;
+    const witnesses = new Set();
+    if (state.backup.active) {
+      const seen = new Set(["BKUP"]);
+      const queue = ["BKUP"];
+      for (let qi = 0; qi < queue.length; qi++) {
+        const cur = queue[qi];
+        for (const nb of adj.get(cur) || []) {
+          if (seen.has(nb)) continue;
+          seen.add(nb);
+          if (nb !== "MAIN" && nb !== "BKUP") witnesses.add(nb);
+          queue.push(nb);
+        }
+      }
+    }
+    coord.quorum = witnesses.size;
+    const residualMainWitnesses = trustedDrones.filter(
+      (d) => Math.hypot(MAIN_POS.x - d.pos.x, MAIN_POS.z - d.pos.z) <= CFG.mainRange
+    ).length;
+    coord.splitBrainRisk =
+      !state.main.active &&
+      state.handoverTimer > 0 &&
+      state.interference &&
+      residualMainWitnesses > 0;
+    const meshCount = state.edges.filter((e) => e.kind === "mesh").length;
+    const safetyCount = state.edges.length - meshCount;
+    const bulkCount = Math.round(state.buffered / 40);
+    state.channels.safety.load = safetyCount;
+    state.channels.telemetry.load = meshCount;
+    state.channels.bulk.load = bulkCount;
+    state.channels.safety.latency = 0.02 + (state.interference ? 0.06 : 0);
+    state.channels.telemetry.latency = 0.08 + (state.storm ? 0.14 : 0);
+    state.channels.bulk.latency = 0.24 + (state.interference ? 0.3 : 0);
 
     let connectedCount = 0;
     let hopSum = 0;
@@ -1161,6 +1309,25 @@
         freshest = Math.min(freshest, d.obsAge);
       }
     }
+
+    // Independent safety posture: each drone keeps a local failsafe even when
+    // coordination or trust is lost. These are simulation states, not firmware.
+    for (const d of state.drones) {
+      if (d.failed) {
+        d.safetyMode = "emergency landing";
+        state.safety.emergencyLandings = Math.max(state.safety.emergencyLandings, state.failedDrones.length);
+      } else if (!d.trusted) {
+        d.safetyMode = "isolated · local hold";
+      } else if (d.battery <= state.safety.reserve) {
+        d.safetyMode = "battery reserve · RTL";
+      } else if (!d.connected && !d.group) {
+        d.safetyMode = "lost link · RTL";
+      } else {
+        d.safetyMode = "nominal";
+      }
+    }
+    state.safety.isolated = state.drones.filter((d) => !d.trusted).map((d) => d.id);
+    state.safety.rtlEvents = state.drones.filter((d) => d.safetyMode.indexOf("RTL") >= 0).length;
 
     state.edges = edges;
     state.nodes = nodes;
@@ -1225,6 +1392,16 @@
     featureChips: $("#feature-chips"),
     featureSummary: $("#feature-summary"),
     runDrill: $("#run-drill"),
+    archStatus: $("#arch-status"),
+    archLevels: $("#arch-levels"),
+    archAuthority: $("#arch-authority"),
+    archHeartbeats: $("#arch-heartbeats"),
+    archLease: $("#arch-lease"),
+    archGuard: $("#arch-guard"),
+    archChannels: $("#arch-channels"),
+    archSafety: $("#arch-safety"),
+    archTrust: $("#arch-trust"),
+    archAudit: $("#arch-audit"),
     inspector: $("#inspector"),
     inspectorMode: $("#inspector-mode"),
     eventLog: $("#event-log"),
@@ -1428,6 +1605,10 @@
       state.groups.length,
       state.buffered | 0,
       state.records | 0,
+      state.coordination.epoch,
+      state.coordination.quorum,
+      state.coordination.rejected,
+      state.audit.length,
       state.selected ? inspectorNodeSignature(state.selected) : ""
     ].join("~");
     if (!force && sig === state.inspectorSignature) return;
@@ -1471,6 +1652,9 @@
         "</div>" +
         '<dl class="inspector-rows">' +
         row("Authority", active ? (acting ? "primary" : "standby") : "unavailable", active ? (acting ? "ok" : "") : "bad") +
+        row("Term / epoch", state.coordination.term + " / " + state.coordination.epoch, "") +
+        row("Quorum", state.coordination.quorum + " / " + CFG.quorumNeeded + " witnesses", state.coordination.quorum < CFG.quorumNeeded ? "warn" : "ok") +
+        row("Split-brain guard", state.coordination.splitBrainRisk ? "BLOCKED" : "armed", state.coordination.splitBrainRisk ? "bad" : "ok") +
         row("Replica age", state.replicaAge.toFixed(1) + "s", state.replicaAge > 4 ? "warn" : "ok") +
         row("Connected drones", state.connectedCount + " / " + CFG.count, state.connectedCount < CFG.count ? "warn" : "ok") +
         row("Local groups", String(state.groups.length), state.groups.length ? "warn" : "") +
@@ -1507,6 +1691,7 @@
             (e.b === d.id && (e.a === "MAIN" || e.a === "BKUP"))
         );
     const parent = state.parent.get(d.id);
+    const lastObs = state.observations.slice().reverse().find((o) => o.source === d.id);
     const obsTone = d.failed ? "bad" : d.connected ? "ok" : "warn";
     const obsLabel = d.failed ? "stale" : d.connected ? "live" : "delayed";
 
@@ -1521,12 +1706,22 @@
       (d.failed ? "OFFLINE" : d.leader ? "LEADER" : d.connected ? "MESHED" : "DELAYED") +
       "</span></div>" +
       '<dl class="inspector-rows">' +
+      row("Identity", d.identity + (d.trusted ? " · verified" : " · revoked"), d.trusted ? "ok" : "bad") +
+      row("AI level", d.leader ? "drone + group coordinator" : "drone AI · local safety", "") +
+      row("Safety", d.safetyMode, d.safetyMode === "nominal" ? "ok" : "warn") +
       row("Status", d.failed ? "unresponsive" : d.connected ? "connected" : "local group", d.failed ? "bad" : d.connected ? "ok" : "warn") +
       row("Hops", d.hops != null ? String(d.hops) : "no route", d.hops != null && d.hops > 3 ? "warn" : "") +
       row("Uplink", parent || (d.connected ? state.acting : d.leader ? "local lead" : "buffered"), "") +
       row("Observation", d.failed || !d.connected ? obsLabel : "live", obsTone) +
       row("Freshness", Math.round(d.obsAge) + "s", d.obsAge > 20 ? "bad" : d.obsAge > 6 ? "warn" : "ok") +
       row("Last sync", d.failed ? "before loss" : d.connected ? "continuous" : "when linked", "") +
+      row(
+        "Last record",
+        lastObs
+          ? lastObs.id + " · " + lastObs.dataType + " · " + lastObs.confidence + "% · exp " + lastObs.expiresAt.toFixed(1) + "s"
+          : "none buffered",
+        lastObs ? "" : "warn"
+      ) +
       "</dl>" +
       '<div class="inspector-battery"><span>Battery <b>' + (d.failed ? "0%" : Math.round(d.battery) + "%") + "</b></span>" +
       '<i><b class="' + (d.battery < 32 ? "low" : "") + '" style="width:' + (d.failed ? 0 : Math.round(d.battery)) + '%"></b></i></div>' +
@@ -1549,11 +1744,12 @@
 
   function inspectorNodeSignature(id) {
     if (id === "MAIN" || id === "BKUP") {
-      return [state.main.active, state.backup.active, state.acting, state.replicaAge.toFixed(0), state.records | 0, state.buffered | 0].join(",");
+      return [state.main.active, state.backup.active, state.acting, state.replicaAge.toFixed(0), state.records | 0, state.buffered | 0, state.coordination.epoch, state.coordination.quorum].join(",");
     }
     const d = state.drones.find((x) => x.id === id);
     if (!d) return "missing";
-    return [d.failed, d.connected, d.hops, d.group, d.leader, Math.round(d.battery), Math.round(d.obsAge)].join(",");
+    const lastObs = state.observations.slice().reverse().find((o) => o.source === id);
+    return [d.failed, d.connected, d.hops, d.group, d.leader, Math.round(d.battery), Math.round(d.obsAge), d.trusted, d.safetyMode, lastObs ? lastObs.id : ""].join(",");
   }
 
   function row(label, value, tone) {
@@ -1592,6 +1788,18 @@
     }
   }
 
+  function auditEvent(actor, action, result) {
+    state.audit.push({
+      id: "A" + String(++state.auditSeq).padStart(4, "0"),
+      at: Math.round(state.time * 10) / 10,
+      clock: fmtClock(state.time),
+      actor,
+      action,
+      result
+    });
+    if (state.audit.length > 120) state.audit.shift();
+  }
+
   function toast(message, tone) {
     if (!el.stageToast) return;
     el.stageToast.textContent = message;
@@ -1607,8 +1815,11 @@
     if (!el.eventLog) return;
     el.eventLog.innerHTML = "";
     logEvent("Simulation online — 12 drones authenticated", "ok");
+    logEvent("Zero-trust identities verified · encrypted channels active", "");
     logEvent("Backup AI replica in sync with Main AI", "");
     logEvent("Shared map loaded — 179 validated records", "");
+    logEvent("Privacy guard · onboard processing, minimal payloads", "");
+    auditEvent("SYSTEM", "boot", "12 identities verified · encrypted channels · epoch " + state.coordination.epoch);
   }
 
   /* ============================================================
@@ -1625,7 +1836,9 @@
     state.acting = null;
     state.handoverTimer = CFG.handover;
     state.handoverTotal = CFG.handover;
+    state.coordination.lastTransition = state.time;
     logEvent("Main AI unresponsive — health check started (2.5s)", "bad");
+    auditEvent("MAIN", "heartbeat", "lost · lease " + state.coordination.lease.toFixed(1) + "s");
     if (!quiet) {
       toast("Main AI lost. The Backup AI is running a health check before taking authority.", "warn");
     }
@@ -1638,6 +1851,11 @@
     state.handoverTimer = 0;
     state.acting = "MAIN";
     state.replicaAge = 0.2;
+    state.coordination.term++;
+    state.coordination.epoch++;
+    state.coordination.splitBrainRisk = false;
+    state.coordination.lastTransition = state.time;
+    auditEvent("MAIN", "reclaim", "accepted · term " + state.coordination.term + " epoch " + state.coordination.epoch);
     if (!quiet) {
       logEvent("Main AI restored — primary authority resumed", "ok");
       toast("Main AI is back. Backup returned to standby.", "ok");
@@ -1718,6 +1936,30 @@
     updateUI(true);
   }
 
+  function isolateDrone() {
+    const candidates = state.drones.filter((d) => !d.failed);
+    if (!candidates.length) {
+      toast("No active drone to isolate.", "warn");
+      return;
+    }
+    let d = state.selected && state.selected.startsWith("D")
+      ? candidates.find((x) => x.id === state.selected)
+      : null;
+    if (!d) d = candidates.find((x) => !x.trusted) || pick(candidates);
+    d.trusted = !d.trusted;
+    const decision = d.trusted ? "retrusted" : "isolated";
+    logEvent(
+      d.trusted
+        ? "Drone " + d.id + " re-authorised — identity re-verified, links restored"
+        : "Drone " + d.id + " isolated — credentials revoked, local hold engaged",
+      d.trusted ? "ok" : "warn"
+    );
+    auditEvent("ADMIN", d.trusted ? "retrust" : "isolate", d.id + " · " + decision + " · epoch " + state.coordination.epoch);
+    toast(d.id + " " + decision + ". " + (d.trusted ? "Rejoining the trusted mesh." : "Links revoked; safety hold active."), d.trusted ? "ok" : "warn");
+    computeNetwork();
+    updateUI(true);
+  }
+
   function severLink() {
     computeNetwork();
     if (!state.edges.length) {
@@ -1776,7 +2018,9 @@
     state.recall = true;
     state.recallStart = state.time;
     state.recallUntil = state.time + 6;
+    state.safety.manualOverrides++;
     logEvent("Safe recall ordered — fleet returning to base holding pattern", "warn");
+    auditEvent("ADMIN", "recall", "manual override · independent safety retained");
     toast("Safe recall ordered. All drones returning to base.", "");
     computeNetwork();
     updateUI(true);
@@ -1791,7 +2035,17 @@
     state.interference = false;
     state.severed = [];
     state.recall = false;
+    state.coordination.heartbeats = { MAIN: 0, BKUP: 0 };
+    state.coordination.lease = CFG.leaseSeconds;
+    state.coordination.quorum = 0;
+    state.coordination.rejected = 0;
+    state.coordination.splitBrainRisk = false;
+    state.coordination.guardNotified = false;
+    state.safety.isolated = [];
+    state.safety.rtlEvents = 0;
     for (const d of state.drones) {
+      d.trusted = true;
+      d.safetyMode = "nominal";
       if (d.failed) {
         d.failed = false;
         d.battery = Math.max(86, d.battery);
@@ -1809,6 +2063,7 @@
     computeNetwork();
     state.selected = null;
     logEvent("Restore accepted — links re-established, records reconciling", "ok");
+    auditEvent("ADMIN", "restore", "faults cleared · epoch " + state.coordination.epoch);
     toast(
       hadBuffer
         ? "Network restored. Watch buffered records reconcile into the shared map."
@@ -1902,6 +2157,21 @@
     state.view = "command";
     state.recall = false;
     state.stats = { packets: 0, failovers: 0, reconciliations: 0 };
+    state.audit = [];
+    state.auditSeq = 0;
+    state.observations = [];
+    state.obsSeq = 0;
+    state.coordination.term = 1;
+    state.coordination.epoch = 1;
+    state.coordination.commandSeq = 0;
+    state.coordination.lastTransition = 0;
+    state.channels = {
+      safety: { label: "Safety / control", load: 0, delivered: 0, latency: 0.02 },
+      telemetry: { label: "Telemetry / coordination", load: 0, delivered: 0, latency: 0.08 },
+      bulk: { label: "Bulk data", load: 0, delivered: 0, latency: 0.24 }
+    };
+    state.safety.emergencyLandings = 0;
+    state.safety.manualOverrides = 0;
     state.history = [];
     state.historyAcc = 0;
     state.historyPackets = 0;
@@ -2007,6 +2277,10 @@
 
   function runAction(action) {
     if (state.drillActive) clearDrill();
+    if (action !== "restore") {
+      state.coordination.commandSeq++;
+      auditEvent("ADMIN", action, "authorised · epoch " + state.coordination.epoch + " · seq " + state.coordination.commandSeq);
+    }
     switch (action) {
       case "severLink":
         severLink();
@@ -2025,6 +2299,9 @@
         break;
       case "failDrone":
         failDrone();
+        break;
+      case "isolate":
+        isolateDrone();
         break;
       case "recall":
         runRecall();
@@ -2055,6 +2332,81 @@
   function setTag(node, text, tone) {
     node.textContent = text;
     node.className = "status-tag" + (tone ? " " + tone : "");
+  }
+
+  function setArchText(node, text, tone) {
+    if (!node) return;
+    if (node.textContent !== text) node.textContent = text;
+    node.className = tone || "";
+  }
+
+  function updateArchitecturePanel() {
+    const c = state.coordination;
+    const trusted = state.drones.filter((d) => d.trusted).length;
+    const guard =
+      c.splitBrainRisk
+        ? { text: "SPLIT-BRAIN GUARD", tone: "bad" }
+        : !state.acting
+          ? { text: "NO PRIMARY", tone: "bad" }
+          : state.handoverTimer > 0
+            ? { text: "HANDOVER", tone: "warn" }
+            : state.safety.isolated.length
+              ? { text: "RESTRICTED", tone: "warn" }
+              : state.groups.length
+                ? { text: "DEGRADED", tone: "warn" }
+                : { text: "GUARDED", tone: "ok" };
+
+    setTag(el.archStatus, guard.text, guard.tone);
+    setArchText(
+      el.archLevels,
+      AI_LEVELS.map((level) => level.label.split(" ")[0].toLowerCase()).join(" · "),
+      ""
+    );
+    setArchText(
+      el.archAuthority,
+      state.acting
+        ? state.acting + " · term " + c.term + " · epoch " + c.epoch + " · seq " + c.commandSeq
+        : "none · term " + c.term + " · epoch " + c.epoch,
+      state.acting ? "" : "bad"
+    );
+    setArchText(
+      el.archHeartbeats,
+      "MAIN " + c.heartbeats.MAIN.toFixed(1) + "s · BKUP " + c.heartbeats.BKUP.toFixed(1) + "s",
+      c.heartbeats.MAIN > CFG.leaseSeconds ? "warn" : ""
+    );
+    setArchText(
+      el.archLease,
+      c.lease.toFixed(1) + "s left · " + c.quorum + "/" + CFG.quorumNeeded + " witnesses · " + c.rejected + " rejected",
+      c.lease <= 0 || c.quorum < CFG.quorumNeeded ? "warn" : "ok"
+    );
+    setArchText(
+      el.archGuard,
+      c.splitBrainRisk ? "blocked · ambiguous heartbeat" : "armed · epochs enforced",
+      c.splitBrainRisk ? "bad" : "ok"
+    );
+    setArchText(
+      el.archChannels,
+      COMM_CHANNELS.map((ch) => {
+        const live = state.channels[ch.id];
+        return ch.id.charAt(0).toUpperCase() + " " + Math.round(live.load) + "/" + Math.round(live.latency * 1000) + "ms";
+      }).join(" · "),
+      ""
+    );
+    const safetyParts = ["geofence", "reserve " + state.safety.reserve + "%"];
+    if (state.safety.rtlEvents) safetyParts.push(state.safety.rtlEvents + " RTL");
+    if (state.safety.emergencyLandings) safetyParts.push(state.safety.emergencyLandings + " landing");
+    setArchText(el.archSafety, safetyParts.join(" · "), state.safety.rtlEvents ? "warn" : "ok");
+    setArchText(
+      el.archTrust,
+      trusted + "/" + CFG.count + " verified · " + (state.privacy.onboardProcessing ? "onboard" : "raw") + " · " + state.safety.isolated.length + " isolated",
+      trusted < CFG.count ? "warn" : "ok"
+    );
+    const last = state.audit[state.audit.length - 1];
+    setArchText(
+      el.archAudit,
+      last ? last.clock + " · " + last.actor + " " + last.action + " → " + last.result : "no signed events yet",
+      ""
+    );
   }
 
   function updateUI(force) {
@@ -2093,6 +2445,7 @@
     const coordTone =
       coordLabel === "Nominal" ? "ok" : coordLabel === "Partitioned" ? "bad" : "warn";
     setTag(el.coordStatus, coordLabel, coordTone);
+    updateArchitecturePanel();
 
     el.mainCoord.classList.toggle("is-failing", !state.main.active);
     el.mainCoord.classList.toggle("is-acting", state.acting === "MAIN");
@@ -2302,6 +2655,48 @@
         handoverSeconds: Number(state.handoverTimer.toFixed(2)),
         replicaAgeSeconds: Number(state.replicaAge.toFixed(2))
       },
+      architecture: {
+        aiLevels: AI_LEVELS.map((level) => ({ id: level.id, label: level.label, role: level.role })),
+        coordination: {
+          term: state.coordination.term,
+          epoch: state.coordination.epoch,
+          leaseSeconds: Number(state.coordination.lease.toFixed(2)),
+          heartbeats: {
+            main: Number(state.coordination.heartbeats.MAIN.toFixed(2)),
+            backup: Number(state.coordination.heartbeats.BKUP.toFixed(2))
+          },
+          quorum: state.coordination.quorum,
+          quorumNeeded: CFG.quorumNeeded,
+          commandSequence: state.coordination.commandSeq,
+          staleCommandsRejected: state.coordination.rejected,
+          splitBrainRisk: state.coordination.splitBrainRisk
+        },
+        channels: COMM_CHANNELS.map((ch) => {
+          const live = state.channels[ch.id];
+          return {
+            id: ch.id,
+            label: ch.label,
+            priority: ch.priority,
+            activeLinks: Math.round(live.load),
+            delivered: Math.round(live.delivered),
+            latencyMs: Math.round(live.latency * 1000)
+          };
+        }),
+        safety: {
+          geofence: state.safety.geofence,
+          batteryReserve: state.safety.reserve,
+          emergencyLandings: state.safety.emergencyLandings,
+          rtlEvents: state.safety.rtlEvents,
+          manualOverrides: state.safety.manualOverrides,
+          isolatedDrones: state.safety.isolated.slice()
+        },
+        privacy: {
+          onboardProcessing: state.privacy.onboardProcessing,
+          minimalPayload: state.privacy.minimalPayload,
+          retentionSeconds: state.privacy.retentionSeconds
+        },
+        performanceTargets: PERF_TARGETS
+      },
       map: {
         id: state.mapId,
         label: currentMap().label,
@@ -2318,7 +2713,24 @@
           ageSeconds: Math.round(f.age * 10) / 10,
           confidence: f.confidence,
           observers: f.observers,
+          sourceDrone: f.sourceDrone,
+          observationId: f.observationId,
+          dataType: f.dataType,
+          fused: f.fused,
+          expiresAtSeconds: Math.round(f.expiresAt * 10) / 10,
           radius: Math.round(f.r * 10) / 10
+        })),
+        observations: state.observations.map((o) => ({
+          id: o.id,
+          featureId: o.featureId,
+          source: o.source,
+          observers: o.observers.slice(),
+          atSeconds: o.at,
+          position: { x: o.x, z: o.z },
+          confidence: o.confidence,
+          dataType: o.dataType,
+          status: o.status,
+          expiresAtSeconds: o.expiresAt
         })),
         records: Math.round(state.records),
         buffered: Math.round(state.buffered),
@@ -2360,6 +2772,14 @@
         clock: e.clock,
         tone: e.tone,
         text: e.text
+      })),
+      audit: state.audit.slice(-200).map((e) => ({
+        id: e.id,
+        atSeconds: e.at,
+        clock: e.clock,
+        actor: e.actor,
+        action: e.action,
+        result: e.result
       }))
     };
   }
@@ -2426,6 +2846,20 @@
       ["acting_coordinator", s.coordinators.acting || "none"],
       ["handover_seconds", s.coordinators.handoverSeconds],
       ["replica_age_seconds", s.coordinators.replicaAgeSeconds],
+      ["coordination_term", s.architecture.coordination.term],
+      ["coordination_epoch", s.architecture.coordination.epoch],
+      ["lease_seconds", s.architecture.coordination.leaseSeconds],
+      ["quorum", s.architecture.coordination.quorum + "/" + s.architecture.coordination.quorumNeeded],
+      ["command_sequence", s.architecture.coordination.commandSequence],
+      ["stale_commands_rejected", s.architecture.coordination.staleCommandsRejected],
+      ["split_brain_risk", s.architecture.coordination.splitBrainRisk],
+      ["channel_safety", s.architecture.channels[0].activeLinks + " links · " + s.architecture.channels[0].latencyMs + "ms"],
+      ["channel_telemetry", s.architecture.channels[1].activeLinks + " links · " + s.architecture.channels[1].latencyMs + "ms"],
+      ["channel_bulk", s.architecture.channels[2].activeLinks + " links · " + s.architecture.channels[2].latencyMs + "ms"],
+      ["safety_posture", s.architecture.safety.geofence ? "geofenced" : "open"],
+      ["battery_reserve", s.architecture.safety.batteryReserve],
+      ["isolated_drones", s.architecture.safety.isolatedDrones.join(" ")],
+      ["privacy", s.architecture.privacy.onboardProcessing ? "onboard-minimal" : "raw"],
       ["records", s.map.records],
       ["buffered", s.map.buffered],
       ["freshest_seconds", s.map.freshestSeconds],
@@ -2590,17 +3024,49 @@
     updateDronePositions(dt);
     updateMapFeatures(dt);
 
+    const coord = state.coordination;
+    coord.heartbeats.MAIN = state.main.active ? 0 : coord.heartbeats.MAIN + dt;
+    coord.heartbeats.BKUP = state.backup.active ? 0 : coord.heartbeats.BKUP + dt;
+    coord.lease = state.main.active
+      ? CFG.leaseSeconds
+      : Math.max(0, CFG.leaseSeconds - coord.heartbeats.MAIN);
+
+    if (coord.splitBrainRisk && !coord.guardNotified) {
+      coord.guardNotified = true;
+      logEvent("Split-brain guard armed — coordinator loss is ambiguous while interference persists", "warn");
+      auditEvent("NETWORK", "guard", "armed · ambiguous main path");
+    } else if (!coord.splitBrainRisk) {
+      coord.guardNotified = false;
+    }
+
     if (state.handoverTimer > 0) {
       state.handoverTimer = Math.max(0, state.handoverTimer - dt);
       if (state.handoverTimer === 0) {
-        if (state.backup.active) {
+        const quorumOk = coord.quorum >= CFG.quorumNeeded;
+        if (coord.splitBrainRisk || !quorumOk) {
+          coord.rejected++;
+          state.acting = null;
+          logEvent(
+            coord.splitBrainRisk
+              ? "Split-brain guard blocked promotion — coordinator heartbeat path still ambiguous"
+              : "Quorum not reached (" + coord.quorum + "/" + CFG.quorumNeeded + ") — promotion blocked",
+            "bad"
+          );
+          auditEvent("BKUP", "promote", "rejected · " + (coord.splitBrainRisk ? "split-brain risk" : "no quorum"));
+          toast("Backup promotion held back. Drones remain on independent local safety.", "warn");
+        } else if (state.backup.active) {
           state.acting = "BKUP";
+          coord.epoch++;
+          coord.term++;
+          coord.lastTransition = state.time;
           state.stats.failovers++;
-          logEvent("Backup AI promoted to primary after a clean health check", "ok");
+          logEvent("Backup AI promoted — term " + coord.term + ", epoch " + coord.epoch + ", quorum " + coord.quorum, "ok");
+          auditEvent("BKUP", "promote", "accepted · term " + coord.term + " epoch " + coord.epoch);
           toast("Backup AI is now primary. Shared state was preserved.", "ok");
         } else {
           state.acting = null;
           logEvent("No backup available — local coordinators keeping the network alive", "bad");
+          auditEvent("NETWORK", "handover", "no standby coordinator");
           toast("No central coordinator. Local groups are buffering safely.", "warn");
         }
       }
@@ -2610,6 +3076,12 @@
       state.replicaAge = 0.2 + (state.time * 0.7) % 0.5;
     } else {
       state.replicaAge = Math.min(99, state.replicaAge + dt);
+    }
+
+    for (const key of Object.keys(state.channels)) {
+      const ch = state.channels[key];
+      ch.delivered += ch.load * dt * 0.6;
+      if (ch.delivered > 9999) ch.delivered = 0;
     }
 
     if (state.recall && state.time >= state.recallUntil) {
@@ -2656,7 +3128,13 @@
 
     for (let i = state.packets.length - 1; i >= 0; i--) {
       const p = state.packets[i];
-      if (state.time - p.born > p.dur) state.packets.splice(i, 1);
+      if (p.stale && state.time - p.born > 0.18) {
+        // Epoch check happens at the receiver: old-epoch commands are dropped.
+        state.coordination.rejected++;
+        state.packets.splice(i, 1);
+      } else if (state.time - p.born > p.dur) {
+        state.packets.splice(i, 1);
+      }
     }
 
     sampleTelemetry(dt);
@@ -2773,16 +3251,34 @@
     const list = pool.length ? pool : fallback;
     if (!list.length) return;
     const e = pick(list);
+    const roll = nextRandom();
+    const channel = roll < 0.16 ? "safety" : roll < 0.82 ? "telemetry" : "bulk";
+    // A short burst of in-flight messages from the previous epoch is expected
+    // during a transition. Drones reject them; they never reach the map.
+    const stale =
+      state.coordination.epoch > 1 &&
+      state.time - state.coordination.lastTransition < 1.2 &&
+      nextRandom() < 0.18;
     state.stats.packets++;
+    state.channels[channel].delivered++;
     state.packets.push({
       a: e.a,
       b: e.b,
       dir: nextRandom() > 0.5,
       born: state.time,
       dur: rand(1.2, 2.4),
-      size: rand(1.6, 2.8)
+      size: channel === "bulk" ? rand(2.6, 4.2) : rand(1.6, 2.8),
+      channel,
+      epoch: stale ? state.coordination.epoch - 1 : state.coordination.epoch,
+      stale
     });
     if (state.packets.length > 90) state.packets.shift();
+  }
+
+  function packetColor(p) {
+    if (p.channel === "safety") return C.amber;
+    if (p.channel === "bulk") return "#a78bfa";
+    return C.cyan2;
   }
 
 
@@ -4985,7 +5481,7 @@
     // packets
     if (T.pktPts) {
       let n = 0;
-      const cAmber = [0.98, 0.75, 0.14], cCyan = [0.4, 0.91, 0.98];
+      const cSafety = [0.98, 0.75, 0.14], cTelemetry = [0.4, 0.91, 0.98], cBulk = [0.65, 0.55, 0.98];
       for (const p of state.packets) {
         if (n >= 90) break;
         const na = nodeById(p.a), nb = nodeById(p.b);
@@ -4996,8 +5492,7 @@
         T.pktPos[n * 3] = lerp(na.pos.x, nb.pos.x, k);
         T.pktPos[n * 3 + 1] = lerp(na.pos.y, nb.pos.y, k);
         T.pktPos[n * 3 + 2] = lerp(na.pos.z, nb.pos.z, k);
-        const local = state.drones.find((d) => d.id === p.a || d.id === p.b);
-        const col = local && local.group ? cAmber : cCyan;
+        const col = p.channel === "safety" ? cSafety : p.channel === "bulk" ? cBulk : cTelemetry;
         T.pktCol[n * 3] = col[0]; T.pktCol[n * 3 + 1] = col[1]; T.pktCol[n * 3 + 2] = col[2];
         n++;
       }
@@ -5554,8 +6049,7 @@
     const x = lerp(pa.x, pb.x, k);
     const y = lerp(pa.y, pb.y, k);
     const ctx = state.ctx;
-    const local = state.drones.find((d) => d.id === p.a || d.id === p.b);
-    const color = local && local.group ? C.amber : C.cyan2;
+    const color = packetColor(p);
     ctx.save();
     ctx.strokeStyle = color;
     ctx.globalAlpha = 0.35;
@@ -6110,8 +6604,7 @@
         if (p.dir) k = 1 - k;
         const x = lerp(a.x, b.x, k);
         const y = lerp(a.y, b.y, k);
-        const node = state.drones.find((d) => d.id === p.a || d.id === p.b);
-        const color = node && node.group ? C.amber : C.cyan2;
+        const color = packetColor(p);
         ctx.save();
         ctx.fillStyle = color;
         ctx.shadowColor = color;

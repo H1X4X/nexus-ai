@@ -11,6 +11,7 @@ const html = read("index.html");
 const js = read("assets/app.js");
 const css = read("assets/styles.css");
 const readme = read("README.md");
+const architecture = read("docs/ARCHITECTURE.md");
 const ci = read(".github/workflows/ci.yml");
 
 const valuesFor = (source, attr) =>
@@ -24,6 +25,8 @@ test("required files exist", () => {
     "robots.txt",
     "sitemap.xml",
     "README.md",
+    "docs/ARCHITECTURE.md",
+    "docs/UPGRADES.md",
     "package.json",
     "assets/app.js",
     "assets/styles.css",
@@ -121,6 +124,28 @@ test("v2 UI, logic and styles are all present", () => {
   }
   assert.ok(css.includes(".metrics-chart"), "missing chart styles");
   assert.ok(css.includes("body.focus-mode"), "missing focus-mode styles");
+});
+
+test("v4 distributed architecture hooks are present", () => {
+  for (const id of [
+    "arch-status", "arch-levels", "arch-authority", "arch-heartbeats",
+    "arch-lease", "arch-guard", "arch-channels", "arch-safety",
+    "arch-trust", "arch-audit"
+  ]) {
+    assert.ok(html.includes(`id="${id}"`), `missing #${id}`);
+  }
+  assert.ok(html.includes('data-action="isolate"'), "missing isolate action");
+  assert.ok(js.includes('case "isolate":'), "isolate action has no handler");
+  assert.ok(css.includes(".arch-strip"), "missing architecture strip styles");
+  for (const token of [
+    "AI_LEVELS", "COMM_CHANNELS", "PERF_TARGETS", "auditEvent",
+    "splitBrainRisk", "quorum", "epoch", "dataType", "expiresAt"
+  ]) {
+    assert.ok(js.includes(token), `app.js missing ${token}`);
+  }
+  for (const phrase of ["Heartbeats", "Leader leases", "Three communication channels", "Zero-trust security", "Privacy by design", "Measurable prototype targets"]) {
+    assert.ok(architecture.includes(phrase), `ARCHITECTURE.md missing: ${phrase}`);
+  }
 });
 
 test("docs and CI describe the v2 workflow", () => {

@@ -1,6 +1,24 @@
-# NEXUS AI v2 upgrade notes
+# NEXUS AI upgrade notes
 
-This document records the v2 upgrade applied to the original single-page prototype, plus the v3 3D-map visual overhaul. The app remains dependency-free at runtime: plain JavaScript, local fonts and a locally vendored Three.js r128.
+This document records the v2 upgrade applied to the original single-page prototype, the v3 3D-map visual overhaul, and the v4 distributed-architecture upgrade. The app remains dependency-free at runtime: plain JavaScript, local fonts and a locally vendored Three.js r128.
+
+The full engineering interpretation of the v4 work is in [`ARCHITECTURE.md`](ARCHITECTURE.md). The live simulator exposes its core state in the **Distributed architecture** strip below the metrics.
+
+## v4 — distributed architecture made explicit
+
+The v4 upgrade turns the proposal into a set of visible, testable simulation rules without changing the deterministic seeds, eight maps or six situations.
+
+- **AI responsibility levels** — drone, group, network and human levels are defined in `docs/ARCHITECTURE.md`, surfaced in the live strip and inspector, and included in JSON export. Local drone safety remains independent of any coordinator.
+- **Split-brain-safe failover** — coordinator state now tracks heartbeats, a leader lease, term, epoch, quorum witnesses, command sequence and stale-command rejections. The Backup promotes only after the lease expires and a quorum is visible. An ambiguous heartbeat under interference arms the split-brain guard and blocks promotion; packets from an old epoch are dropped in flight.
+- **Three communication channels** — safety/control, telemetry/coordination and bulk data carry separate load, latency and delivery counters. Packets are coloured by channel in 3D, command and topology views, so bulk traffic is visibly distinct from safety traffic.
+- **Richer observations and sensor fusion** — every generated record has an ID, source drone, timestamp, position, confidence, data type, status and expiration. Two or more independent observers raise confidence. The inspector and exports expose the fields.
+- **Independent safety layer** — drones show a local safety posture (nominal, isolated hold, battery-reserve RTL, lost-link RTL or emergency landing). Geofence, battery reserve, manual overrides and isolation counts are exported.
+- **Zero trust** — each drone has a unique identity. A new **Isolate selected drone** fault revokes trust and removes the node's links while leaving its local safety active. Administrative actions, heartbeats, promotions and reclaims are written to a tamper-evident audit stream shown in the live strip and exported as JSON.
+- **Privacy by design** — onboard processing, minimal payloads and a retention window are explicit state and export fields; the architecture document explains the operating rule.
+- **Measured targets and roadmap** — proposed prototype targets (5 initial drones, 1–2 s status, sub-5 s failover, reconnection sync) are defined in code and documentation. The architecture roadmap is staged from simulation to a controlled hardware prototype.
+- **Documentation** — the static architecture tabs now describe leases, epochs, sensor fusion, three channels, independent safety, zero trust and privacy. The run notes explain epoch-guarded failover.
+
+The export version remains `2.0.0` so existing run tooling keeps working; new data is additive under `architecture`, `map.observations` and `audit`.
 
 ## v3 — full 3D map overhaul
 

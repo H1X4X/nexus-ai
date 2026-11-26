@@ -13,7 +13,7 @@ let source = readFileSync(join(root, "assets/app.js"), "utf8");
    browser-like sandbox. Production code is untouched. */
 const exportLine = `
   globalThis.__NEXUS_TEST__ = {
-    state, CFG, SCENARIOS, MAPS, SITUATIONS,
+    state, CFG, SCENARIOS, MAPS, SITUATIONS, AI_LEVELS, COMM_CHANNELS, PERF_TARGETS,
     setSeed, nextRandom, normalizeSeed, fmtClock,
     sampleTelemetry, buildRunSummary, runFileName, csvCell
   };
@@ -103,6 +103,22 @@ test("scenario, map and situation catalogues are complete", () => {
     assert.ok(app.SCENARIOS[key].label, `scenario ${key} has no label`);
     assert.ok(app.SCENARIOS[key].toast, `scenario ${key} has no toast`);
   }
+});
+
+test("distributed architecture constants and state are coherent", () => {
+  assert.equal(app.AI_LEVELS.map((level) => level.id).join(","), "drone,group,network,human");
+  assert.equal(app.COMM_CHANNELS.map((ch) => ch.id).join(","), "safety,telemetry,bulk");
+  assert.deepEqual(Object.keys(app.state.channels), ["safety", "telemetry", "bulk"]);
+  assert.ok(app.CFG.leaseSeconds > 0);
+  assert.ok(app.CFG.quorumNeeded > 0);
+  assert.ok(app.PERF_TARGETS.failoverSeconds <= 5);
+  assert.ok(app.state.coordination.epoch >= 1);
+  assert.ok(Array.isArray(app.state.observations));
+  assert.ok(Array.isArray(app.state.audit));
+  const summary = app.buildRunSummary();
+  assert.equal(summary.architecture.aiLevels.length, 4);
+  assert.equal(summary.architecture.channels.length, 3);
+  assert.ok(summary.architecture.performanceTargets.failoverSeconds <= 5);
 });
 
 test("telemetry history is sampled on simulated time and capped", () => {
