@@ -109,17 +109,53 @@
         : type === "survivor" || type === "vehicle" ? "optical"
           : "terrain";
 
+  // One source of truth for the enlarged physical arena. Layout tables remain
+  // authored in the original sector coordinates and are scaled once at load,
+  // so map seeds and relative layouts stay deterministic.
+  const WORLD = {
+    scale: 2,
+    halfExtent: 39,
+    gridN: 52,
+    terrainSegments: 160,
+    cameraScale: 1.85,
+    minCameraDist: 24,
+    maxCameraDist: 140,
+    featureRadiusScale: 1.35,
+    buildingFootprintScale: 1.55,
+    buildingHeightScale: 1.35,
+    vegetationDensity: 2.7,
+    grassMax: 560,
+    shadowExtent: 43,
+    skyRadius: 260,
+    rainCount: 1100,
+    rainSpread: 52,
+    rainHeight: 42
+  };
+
   const CFG = {
     count: 12,
-    droneRange: 8.4,
-    mainRange: 11.5,
-    backupRange: 10.8,
+    droneRange: 28,
+    mainRange: 24,
+    backupRange: 24,
     handover: 2.5,
     networkStep: 0.16,
-    maxSevered: 7,
+    maxSevered: 9,
     recordStep: 3.2,
-    sensorRange: 7.4,
+    sensorRange: 8.6,
     mapSyncStep: 2.5,
+    cruiseSpeed: 2.35,
+    climbRate: 1.25,
+    descentRate: 1.05,
+    sensorFov: 110,
+    obstacleMargin: 1,
+    takeoffSeconds: 2.4,
+    landingSeconds: 2.2,
+    surveySeconds: 1.6,
+    windDrift: 0.32,
+    enduranceDrain: 0.052,
+    pendingTtl: 45,
+    maxPending: 90,
+    maxLocalQueue: 14,
     maxLog: 42,
     leaseSeconds: 2.5,
     quorumNeeded: 5,
@@ -135,6 +171,16 @@
     { id: "group", label: "Group AI", role: "local coordination · relay" },
     { id: "network", label: "Network AI", role: "shared picture · mission intent" },
     { id: "human", label: "Human administrator", role: "approval · supervision · override" }
+  ];
+
+  const AUTONOMY_MODES = [
+    { id: "takeoff", label: "Takeoff / climb" },
+    { id: "route", label: "Mission route" },
+    { id: "survey", label: "Sensor survey" },
+    { id: "rtl", label: "Return to outpost" },
+    { id: "landing", label: "Landing" },
+    { id: "hold", label: "Ground hold" },
+    { id: "failed", label: "Emergency landing" }
   ];
 
   // Three logically separate traffic classes. Bulk traffic must never delay
@@ -156,17 +202,17 @@
 
   // Fixed ground command posts: MAIN at the map start, BKUP at the far end.
   // y is refreshed from the terrain height whenever a map is rebuilt.
-  const MAIN_POS = { x: -15, y: 0.4, z: 15 };
-  const BKUP_POS = { x: 15, y: 0.4, z: -15 };
-  const ZONE_POS = { x: -7.2, z: 5.4 };
-  const ZONE_R = 4.6;
-  const STORM_X = 2.4;
+  const MAIN_POS = { x: -15 * WORLD.scale, y: 0.4, z: 15 * WORLD.scale };
+  const BKUP_POS = { x: 15 * WORLD.scale, y: 0.4, z: -15 * WORLD.scale };
+  const ZONE_POS = { x: -7.2 * WORLD.scale, z: 5.4 * WORLD.scale };
+  const ZONE_R = 4.6 * WORLD.scale;
+  const STORM_X = 2.4 * WORLD.scale;
 
   const CAM_PRESETS = {
-    overview: { yaw: -0.65, pitch: 0.52, dist: 38, target: [0, 2.4, 0], auto: false },
-    top: { yaw: 0, pitch: 1.47, dist: 42, target: [0, 0.6, 0], auto: false },
-    front: { yaw: -1.48, pitch: 0.24, dist: 35, target: [0, 2.6, 0], auto: false },
-    orbit: { yaw: -0.65, pitch: 0.44, dist: 38, target: [0, 2.4, 0], auto: true }
+    overview: { yaw: -0.65, pitch: 0.52, dist: 38 * WORLD.cameraScale, target: [0, 3.2, 0], auto: false },
+    top: { yaw: 0, pitch: 1.47, dist: 42 * WORLD.cameraScale, target: [0, 0.6, 0], auto: false },
+    front: { yaw: -1.48, pitch: 0.24, dist: 35 * WORLD.cameraScale, target: [0, 3.4, 0], auto: false },
+    orbit: { yaw: -0.65, pitch: 0.44, dist: 38 * WORLD.cameraScale, target: [0, 3.2, 0], auto: true }
   };
 
   const SCENARIOS = {
@@ -487,7 +533,7 @@
      Each map gets a full battlefield look: heightfield hills, water,
      forest cones, rocks, buildings and roads. The height function mirrors
      the reference's smoothed noise hillfield, scaled from 240x240 arena
-     units into the 39x39 simulator world. Layout is deterministic per map
+     units into the 78x78 simulator world. Layout is deterministic per map
      so every run shows the same battlefield. */
 
   const MAP_TERRAIN = {
@@ -632,6 +678,48 @@
     }
   };
 
+  function scaleWorldData() {
+    const s = WORLD.scale;
+    const sx = (v) => v * s;
+    const scalePoint = (p) => [sx(p[0]), sx(p[1])];
+    const scaleDecor = (d) => {
+      if (typeof d.x === "number") d.x = sx(d.x);
+      if (typeof d.z === "number") d.z = sx(d.z);
+      if (typeof d.x1 === "number") d.x1 = sx(d.x1);
+      if (typeof d.z1 === "number") d.z1 = sx(d.z1);
+      if (typeof d.x2 === "number") d.x2 = sx(d.x2);
+      if (typeof d.z2 === "number") d.z2 = sx(d.z2);
+      if (typeof d.rx === "number") d.rx = sx(d.rx);
+      if (typeof d.rz === "number") d.rz = sx(d.rz);
+      if (d.points) d.points = d.points.map(scalePoint);
+      return d;
+    };
+    for (const map of Object.values(MAPS)) {
+      for (const f of map.features) {
+        f.x = sx(f.x);
+        f.z = sx(f.z);
+        f.r = f.r * WORLD.featureRadiusScale;
+      }
+      (map.decor || []).forEach(scaleDecor);
+    }
+    for (const terr of Object.values(MAP_TERRAIN)) {
+      terr.treeCount = Math.round(terr.treeCount * WORLD.vegetationDensity);
+      terr.rockCount = Math.round(terr.rockCount * WORLD.vegetationDensity);
+      terr.forestZones = terr.forestZones.map((z) => ({
+        x: sx(z.x), z: sx(z.z), rx: sx(z.rx), rz: sx(z.rz)
+      }));
+      terr.roads = terr.roads.map((road) => road.map(scalePoint));
+      terr.buildings = terr.buildings.map((b) => ({
+        x: sx(b.x), z: sx(b.z),
+        w: b.w * WORLD.buildingFootprintScale,
+        d: b.d * WORLD.buildingFootprintScale,
+        h: b.h * WORLD.buildingHeightScale,
+        type: b.type
+      }));
+    }
+  }
+  scaleWorldData();
+
   function hashString(str) {
     let h = 2166136261;
     for (let i = 0; i < str.length; i++) {
@@ -660,28 +748,33 @@
   function terrainHeightFor(mapId, x, z) {
     const terr = MAP_TERRAIN[mapId] || MAP_TERRAIN.wildfire;
     const X = x * 6, Z = z * 6;
+    const s = WORLD.scale, s2 = s * s;
     let n = 12
       + 9 * Math.sin(X * 0.035 + 1.3) * Math.cos(Z * 0.03)
       + 5 * Math.sin(X * 0.07 + Z * 0.05)
       + 2.5 * Math.sin(X * 0.15 - Z * 0.11)
       + 3 * Math.cos(Z * 0.09 + X * 0.02);
-    n -= 17 * Math.exp(-((X - 52) * (X - 52) + (Z - 58) * (Z - 58)) / 650);
-    // Flatten pads at the Main and Backup AI so the bases sit level.
-    const flats = [{ x: 0, z: 0 }, { x: -37.2, z: -37.2 }];
+    n -= 17 * Math.exp(-((X - 52 * s) * (X - 52 * s) + (Z - 58 * s) * (Z - 58 * s)) / (650 * s2));
+    // Flatten pads under the two fixed operator outposts so their consoles sit
+    // level on every map, including the enlarged arena.
+    const flats = [
+      { x: MAIN_POS.x * 6, z: MAIN_POS.z * 6 },
+      { x: BKUP_POS.x * 6, z: BKUP_POS.z * 6 }
+    ];
     for (const f of flats) {
       const l = Math.hypot(X - f.x, Z - f.z);
-      const c = 1 - sstep(14, 32, l);
+      const c = 1 - sstep(14 * s, 32 * s, l);
       n = n * (1 - c) + 12 * c;
     }
     let h = (n - 3) * terr.heightScale + terr.heightBase;
-    if (mapId === "industrial") h += 0.12 * Math.sin(x * 1.7) * Math.cos(z * 1.5);
-    if (mapId === "flood") h += 0.15 * Math.sin(x * 0.6 + z * 0.4);
-    if (mapId === "urban") h += 0.06 * Math.sin(x * 1.9) * Math.cos(z * 1.7);
+    if (mapId === "industrial") h += 0.12 * Math.sin(x * 1.7 / s) * Math.cos(z * 1.5 / s);
+    if (mapId === "flood") h += 0.15 * Math.sin((x * 0.6 + z * 0.4) / s);
+    if (mapId === "urban") h += 0.06 * Math.sin(x * 1.9 / s) * Math.cos(z * 1.7 / s);
     if (mapId === "coast") h -= z * 0.035;
     if (mapId === "battlefield") {
-      h -= 0.55 * Math.exp(-((x + 7) * (x + 7) + (z - 5) * (z - 5)) / 18);
-      h -= 0.5 * Math.exp(-((x - 6) * (x - 6) + (z + 6) * (z + 6)) / 16);
-      h -= 0.4 * Math.exp(-((x - 9) * (x - 9) + (z - 7) * (z - 7)) / 14);
+      h -= 0.55 * Math.exp(-((x + 7 * s) * (x + 7 * s) + (z - 5 * s) * (z - 5 * s)) / (18 * s2));
+      h -= 0.5 * Math.exp(-((x - 6 * s) * (x - 6 * s) + (z + 6 * s) * (z + 6 * s)) / (16 * s2));
+      h -= 0.4 * Math.exp(-((x - 9 * s) * (x - 9 * s) + (z - 7 * s) * (z - 7 * s)) / (14 * s2));
     }
     return clamp(h, -0.7, 3.9);
   }
@@ -705,7 +798,7 @@
   function buildTerrain(mapId) {
     const terr = MAP_TERRAIN[mapId] || MAP_TERRAIN.wildfire;
     const map = MAPS[mapId] || MAPS.wildfire;
-    const N = 30, extent = 19.5, step = (extent * 2) / N;
+    const N = WORLD.gridN, extent = WORLD.halfExtent, step = (extent * 2) / N;
     const heights = new Float32Array((N + 1) * (N + 1));
     for (let j = 0; j <= N; j++) {
       for (let i = 0; i <= N; i++) {
@@ -731,16 +824,17 @@
     const features = map.features;
     const trees = [];
     let attempts = 0;
-    while (trees.length < terr.treeCount && attempts < 9000) {
+    while (trees.length < terr.treeCount && attempts < 16000) {
       attempts++;
-      const x = (rng() * 2 - 1) * 19, z = (rng() * 2 - 1) * 19;
+      const x = (rng() * 2 - 1) * (WORLD.halfExtent - 0.5);
+      const z = (rng() * 2 - 1) * (WORLD.halfExtent - 0.5);
       const h = terrainHeightFor(mapId, x, z);
       if (h < terr.waterLevel + 0.28 || h > 3.4) continue;
-      if (Math.hypot(x - MAIN_POS.x, z - MAIN_POS.z) < 3.4 ||
-          Math.hypot(x - BKUP_POS.x, z - BKUP_POS.z) < 3.4) continue;
+      if (Math.hypot(x - MAIN_POS.x, z - MAIN_POS.z) < 3.4 * WORLD.scale ||
+          Math.hypot(x - BKUP_POS.x, z - BKUP_POS.z) < 3.4 * WORLD.scale) continue;
       let bad = false;
       for (const f of features) {
-        if (Math.hypot(x - f.x, z - f.z) < f.r + 0.7) { bad = true; break; }
+        if (Math.hypot(x - f.x, z - f.z) < f.r + 0.7 * WORLD.scale) { bad = true; break; }
       }
       if (bad) continue;
       let inside = false;
@@ -751,7 +845,7 @@
       if (rng() > (inside ? 1 : terr.sparse)) continue;
       trees.push({
         x, z,
-        scale: 0.7 + rng() * 0.9,
+        scale: 0.88 + rng() * 1.05,
         hue: terr.treeHue[0] + rng() * (terr.treeHue[1] - terr.treeHue[0]),
         sat: 0.45 + rng() * 0.2,
         light: 0.14 + rng() * 0.12
@@ -759,17 +853,19 @@
     }
     const rocks = [];
     let rockAttempts = 0;
-    while (rocks.length < terr.rockCount && rockAttempts < 3000) {
+    while (rocks.length < terr.rockCount && rockAttempts < 6000) {
       rockAttempts++;
-      const x = (rng() * 2 - 1) * 19, z = (rng() * 2 - 1) * 19;
+      const x = (rng() * 2 - 1) * (WORLD.halfExtent - 0.5);
+      const z = (rng() * 2 - 1) * (WORLD.halfExtent - 0.5);
       const h = terrainHeightFor(mapId, x, z);
       if (h < terr.waterLevel + 0.05 || h > 3.6) continue;
-      if (Math.hypot(x - MAIN_POS.x, z - MAIN_POS.z) < 3.0 ||
-          Math.hypot(x - BKUP_POS.x, z - BKUP_POS.z) < 3.0) continue;
+      if (Math.hypot(x - MAIN_POS.x, z - MAIN_POS.z) < 3 * WORLD.scale ||
+          Math.hypot(x - BKUP_POS.x, z - BKUP_POS.z) < 3 * WORLD.scale) continue;
       rocks.push({ x, z, scale: 0.3 + rng() * 0.55, shade: 0.3 + rng() * 0.4 });
     }
     const buildings = terr.buildings.map((b) => ({
-      x: b.x + (rng() - 0.5) * 0.4, z: b.z + (rng() - 0.5) * 0.4,
+      x: b.x + (rng() - 0.5) * 0.4 * WORLD.scale,
+      z: b.z + (rng() - 0.5) * 0.4 * WORLD.scale,
       w: b.w, d: b.d, h: b.h, type: b.type
     }));
     state.terrain = {
@@ -809,9 +905,10 @@
     log: [],
     audit: [],
     observations: [],
+    pendingObservations: [],
     obsSeq: 0,
     auditSeq: 0,
-    stats: { packets: 0, failovers: 0, reconciliations: 0 },
+    stats: { packets: 0, failovers: 0, reconciliations: 0, observations: 0, expiredObservations: 0, staleRejected: 0 },
     coordination: {
       term: 1,
       epoch: 1,
@@ -894,8 +991,8 @@
     terrainSignature: "",
     three: null,
     canvas3d: null,
-    camera: { yaw: -0.65, pitch: 0.52, dist: 38, target: [0, 2.4, 0], auto: false },
-    camGoal: { yaw: -0.65, pitch: 0.52, dist: 38, target: [0, 2.4, 0], auto: false },
+    camera: Object.assign({}, CAM_PRESETS.overview),
+    camGoal: Object.assign({}, CAM_PRESETS.overview),
     dragging: false,
     dragMoved: 0,
     pinch: null,
@@ -912,26 +1009,280 @@
 
   /* ---------------- drone setup ---------------- */
 
+  function clampToArena(v) {
+    return clamp(v, -(WORLD.halfExtent - 2), WORLD.halfExtent - 2);
+  }
+
+  // Relay patrol phase offsets around the 12-stop loop. Mixed parity keeps
+  // the short approach legs to both posts occupied as the group rotates.
+  const RELAY_PHASES = [0, 1, 2, 6, 7, 10];
+
+  const CORRIDOR = (() => {
+    const dx = BKUP_POS.x - MAIN_POS.x, dz = BKUP_POS.z - MAIN_POS.z;
+    const len = Math.hypot(dx, dz) || 1;
+    return {
+      dx, dz, len,
+      px: -dz / len,
+      pz: dx / len,
+      point(t, lane) {
+        return {
+          x: clampToArena(MAIN_POS.x + dx * t + this.px * lane),
+          z: clampToArena(MAIN_POS.z + dz * t + this.pz * lane)
+        };
+      },
+      tFor(x, z) {
+        return ((x - MAIN_POS.x) * dx + (z - MAIN_POS.z) * dz) / (len * len);
+      }
+    };
+  })();
+
+  function relayLane(i) {
+    return ((i % 3) - 1) * 1.3;
+  }
+
+  // Relay aircraft are spaced along the whole post-to-post corridor. Survey
+  // aircraft start on the same backbone, then branch to real map features via
+  // a staging point so the branch stays within radio range.
+  function missionPlanFor(i) {
+    const relayCount = Math.ceil(CFG.count / 2);
+    if (i % 2 === 0) {
+      // A back-and-forth corridor patrol keeps one aircraft near each post
+      // instead of letting the whole relay group drift to one end.
+      const stops = Array.from({ length: relayCount + 1 }, (_, k) => k / relayCount);
+      const sequence = stops.concat(stops.slice(1, -1).reverse());
+      const waypoints = sequence.map((t, k) => Object.assign(
+        CORRIDOR.point(t, relayLane(k)),
+        { type: "relay", hold: k === 0 || k === relayCount ? 4.5 : 0 }
+      ));
+      return { mission: "relay corridor", waypoints, startIndex: RELAY_PHASES[i / 2] };
+    }
+
+    const features = (MAPS[state.mapId] || MAPS.wildfire).features
+      .slice()
+      .sort((a, b) => CORRIDOR.tFor(a.x, a.z) - CORRIDOR.tFor(b.x, b.z));
+    const anchor = Object.assign(
+      CORRIDOR.point((i + 0.5) / CFG.count, relayLane(i)),
+      { type: "relay", hold: 2 + (i - 1) / 2 * 0.4 }
+    );
+    const slot = (i - 1) / 2;
+    const targets = [
+      features[slot % features.length],
+      features[(slot + 3) % features.length]
+    ];
+    const waypoints = [anchor];
+    for (const f of targets) {
+      if (!f) continue;
+      const stage = Object.assign({
+        x: clampToArena((anchor.x + f.x) / 2),
+        z: clampToArena((anchor.z + f.z) / 2)
+      }, { type: "staging" });
+      waypoints.push(stage);
+      waypoints.push({ x: f.x, z: f.z, type: "survey", featureId: f.id });
+      waypoints.push(Object.assign({}, anchor));
+    }
+    return { mission: "feature survey", waypoints, startIndex: 0 };
+  }
+
+  function resetMissionState() {
+    state.pendingObservations = [];
+    for (const d of state.drones) d.localQueue = [];
+    assignMissions();
+  }
+
+  function assignMissions() {
+    for (const d of state.drones) {
+      const plan = missionPlanFor(d.idx);
+      d.mission = plan.mission;
+      d.waypoints = plan.waypoints;
+      d.wpIndex = plan.startIndex;
+      d.waypointTime = 0;
+      d.lastSurveyFeature = null;
+      d.rtlNotified = false;
+      d.localQueue = [];
+      const start = d.waypoints[d.wpIndex] || d.waypoints[0];
+      const next = d.waypoints[(d.wpIndex + 1) % d.waypoints.length] || MAIN_POS;
+      const gh = heightAt(start.x, start.z);
+      d.pos.x = start.x;
+      d.pos.z = start.z;
+      d.pos.y = gh + 0.15;
+      d.cruiseAlt = gh + 5.2 + (d.idx % 4) * 0.7;
+      d.heading = Math.atan2(next.z - start.z, next.x - start.x);
+      d.autonomyMode = "takeoff";
+      d.modeTime = d.idx * 0.18;
+      d.flightTime = 0;
+      d.windOffset = { x: 0, z: 0 };
+    }
+  }
+
+  function setAutonomyMode(d, mode) {
+    if (d.autonomyMode === mode) return;
+    d.autonomyMode = mode;
+    d.modeTime = 0;
+  }
+
+  function nearestPost(d) {
+    return Math.hypot(d.pos.x - MAIN_POS.x, d.pos.z - MAIN_POS.z) <=
+      Math.hypot(d.pos.x - BKUP_POS.x, d.pos.z - BKUP_POS.z)
+      ? MAIN_POS
+      : BKUP_POS;
+  }
+
+  function steerAroundObstacles(d, dx, dz) {
+    const margin = CFG.obstacleMargin;
+    for (const b of state.terrain ? state.terrain.buildings : []) {
+      const gh = heightAt(b.x, b.z);
+      if (d.pos.y > gh + b.h + margin) continue;
+      const testX = d.pos.x + dx * 1.6, testZ = d.pos.z + dz * 1.6;
+      if (Math.abs(testX - b.x) < b.w / 2 + margin &&
+          Math.abs(testZ - b.z) < b.d / 2 + margin) {
+        const sign = d.idx % 2 ? 1 : -1;
+        return { x: -dz * sign, z: dx * sign };
+      }
+    }
+    return { x: dx, z: dz };
+  }
+
+  function updateAutonomy(dt) {
+    const sit = currentSituation();
+    for (const d of state.drones) {
+      const gh = heightAt(d.pos.x, d.pos.z);
+      d.obstacleState = "clear";
+      if (d.failed) {
+        setAutonomyMode(d, "failed");
+        d.pos.y = Math.max(gh + 0.08, d.pos.y - dt * CFG.descentRate);
+        continue;
+      }
+      if (!d.trusted) {
+        setAutonomyMode(d, "hold");
+        d.pos.y = Math.max(d.pos.y, gh + 2.2);
+        continue;
+      }
+
+      const reserve = d.battery <= state.safety.reserve;
+      if ((reserve || state.recall || (!d.connected && !d.group)) &&
+          (d.autonomyMode === "route" || d.autonomyMode === "survey" || d.autonomyMode === "takeoff")) {
+        setAutonomyMode(d, "rtl");
+        if (!d.rtlNotified) {
+          d.rtlNotified = true;
+          logEvent(
+            (reserve ? "Battery reserve reached" : state.recall ? "Safe recall received" : "Lost link") +
+              " · " + d.id + " returning to the nearest outpost",
+            "warn"
+          );
+          auditEvent("DRONE", "rtl", d.id + " · " + (reserve ? "reserve" : state.recall ? "manual recall" : "lost link"));
+        }
+      }
+
+      d.modeTime += dt;
+      if (d.autonomyMode === "takeoff") {
+        const k = clamp(d.modeTime / CFG.takeoffSeconds, 0, 1);
+        d.pos.y = lerp(gh + 0.15, d.cruiseAlt, k);
+        if (k >= 1) setAutonomyMode(d, "route");
+      } else if (d.autonomyMode === "route" || d.autonomyMode === "survey") {
+        if (d.autonomyMode === "survey") {
+          // Station-keeping sensor sweep, not a navigation pattern.
+          d.heading += dt * 0.42;
+          if (d.modeTime >= CFG.surveySeconds) {
+            d.wpIndex = (d.wpIndex + 1) % d.waypoints.length;
+            d.waypointTime = 0;
+            setAutonomyMode(d, "route");
+          }
+        } else {
+          const wp = d.waypoints[d.wpIndex % d.waypoints.length];
+          let dx = wp.x - d.pos.x, dz = wp.z - d.pos.z;
+          const dist = Math.hypot(dx, dz);
+          if (dist < 0.9 && wp.hold) {
+            d.waypointTime += dt;
+            d.heading += dt * 0.12;
+            if (d.waypointTime >= wp.hold) {
+              d.wpIndex = (d.wpIndex + 1) % d.waypoints.length;
+              d.waypointTime = 0;
+            }
+          } else if (dist < 0.9) {
+            d.waypointTime = 0;
+            if (wp.type === "survey") {
+              d.lastSurveyFeature = wp.featureId || null;
+              setAutonomyMode(d, "survey");
+            } else {
+              d.wpIndex = (d.wpIndex + 1) % d.waypoints.length;
+            }
+          } else {
+            const desired = { x: dx / dist, z: dz / dist };
+            const steered = steerAroundObstacles(d, desired.x, desired.z);
+            d.obstacleState = steered.x !== desired.x || steered.z !== desired.z
+              ? "avoiding structure"
+              : d.pos.y - gh < 1.4 ? "terrain clearance" : "clear";
+            const sl = Math.hypot(steered.x, steered.z) || 1;
+            dx = steered.x / sl; dz = steered.z / sl;
+            const speed = CFG.cruiseSpeed * (d.battery < state.safety.reserve + 10 ? 0.78 : 1);
+            const wind = sit.wind
+              ? { x: sit.wind.x * CFG.windDrift, z: sit.wind.z * CFG.windDrift }
+              : { x: 0, z: 0 };
+            d.pos.x = clampToArena(d.pos.x + (dx * speed + wind.x) * dt);
+            d.pos.z = clampToArena(d.pos.z + (dz * speed + wind.z) * dt);
+            d.windOffset.x += (wind.x - d.windOffset.x) * clamp(dt * 1.2, 0, 1);
+            d.windOffset.z += (wind.z - d.windOffset.z) * clamp(dt * 1.2, 0, 1);
+            d.heading = Math.atan2(dz, dx);
+            d.pos.y = lerp(d.pos.y, Math.max(d.cruiseAlt, gh + 2.2), clamp(dt * 0.8, 0, 1));
+          }
+        }
+      } else if (d.autonomyMode === "rtl" || d.autonomyMode === "landing") {
+        const post = nearestPost(d);
+        const tx = post.x + ((d.idx % 3) - 1) * 1.8;
+        const tz = post.z + ((d.idx % 2) ? 1.8 : -1.8);
+        const dx = tx - d.pos.x, dz = tz - d.pos.z;
+        const dist = Math.hypot(dx, dz);
+        if (dist > 0.8 && d.autonomyMode === "rtl") {
+          const speed = CFG.cruiseSpeed * 1.15;
+          d.pos.x += (dx / dist) * speed * dt;
+          d.pos.z += (dz / dist) * speed * dt;
+          d.heading = Math.atan2(dz, dx);
+          d.pos.y = lerp(d.pos.y, Math.max(gh + 2, d.cruiseAlt * 0.55), clamp(dt, 0, 1));
+        } else {
+          setAutonomyMode(d, "landing");
+          const g = heightAt(d.pos.x, d.pos.z);
+          d.pos.y = Math.max(g + 0.12, d.pos.y - dt * CFG.descentRate);
+          if (d.pos.y <= g + 0.13 && d.modeTime > CFG.landingSeconds * 0.4) {
+            setAutonomyMode(d, "hold");
+            if (!state.recall && !reserve) {
+              // A completed recall can resume the assigned route immediately.
+              d.rtlNotified = false;
+            }
+          }
+        }
+      }
+      d.pos.y = Math.max(d.pos.y, heightAt(d.pos.x, d.pos.z) + 0.12);
+      if (d.autonomyMode !== "landing" && d.autonomyMode !== "hold") {
+        d.battery = Math.max(14, d.battery - dt * CFG.enduranceDrain);
+      }
+    }
+  }
+
   function makeDrones() {
     const drones = [];
     for (let i = 0; i < CFG.count; i++) {
-      const outer = i % 2 === 0;
-      const baseRadius = outer ? 12.1 : 7.8;
-      const baseAngle = (i / CFG.count) * TAU + (outer ? 0.16 : 0);
-      const baseY = outer ? 5.1 + (i % 3) * 0.55 : 4.4 + (i % 4) * 0.5;
       drones.push({
         id: "D" + String(i + 1).padStart(2, "0"),
         identity: "NEXUS-D" + String(i + 1).padStart(3, "0"),
         trusted: true,
         safetyMode: "nominal",
         idx: i,
-        baseAngle,
-        baseRadius,
-        baseY,
-        angle: baseAngle,
-        radius: baseRadius,
-        y: baseY,
-        recallMix: 0,
+        mission: "feature survey",
+        waypoints: [],
+        wpIndex: 0,
+        waypointTime: 0,
+        lastSurveyFeature: null,
+        autonomyMode: "takeoff",
+        modeTime: 0,
+        flightTime: 0,
+        heading: 0,
+        cruiseAlt: 5.4,
+        rtlNotified: false,
+        localQueue: [],
+        deliveryDelay: 0,
+        bufferedObservations: 0,
+        obstacleState: "clear",
+        windOffset: { x: 0, z: 0 },
         battery: Math.round(rand(72, 97)),
         phase: rand(0, TAU),
         failed: false,
@@ -942,29 +1293,11 @@
         leader: false,
         status: "connected",
         obsAge: 1,
-        pos: {
-          x: Math.cos(baseAngle) * baseRadius,
-          y: baseY,
-          z: Math.sin(baseAngle) * baseRadius
-        }
+        pos: { x: 0, y: 1, z: 0 }
       });
     }
     state.drones = drones;
-  }
-
-  function updateDronePositions(dt) {
-    const targetMix = state.recall ? 1 : 0;
-    for (const d of state.drones) {
-      d.recallMix = lerp(d.recallMix, targetMix, clamp(dt * 2.2, 0, 1));
-      d.angle = d.baseAngle + state.time * 0.012;
-      d.radius = lerp(d.baseRadius, 4.1, d.recallMix);
-      d.y = lerp(d.baseY, 2.4, d.recallMix);
-      d.pos.x = Math.cos(d.angle) * d.radius;
-      d.pos.z = Math.sin(d.angle) * d.radius;
-      const bob = Math.sin(state.time * 0.9 + d.phase) * 0.22;
-      d.pos.y = Math.max(d.y + bob, heightAt(d.pos.x, d.pos.z) + 1.35);
-      if (!d.failed) d.battery = Math.max(18, d.battery - dt * 0.018);
-    }
+    assignMissions();
   }
 
   /* ---------------- shared environmental map model ---------------- */
@@ -998,13 +1331,91 @@
     buildTerrain(state.mapId);
   }
 
+  function angleBetween(a, b) {
+    return Math.abs(((a - b + Math.PI * 3) % TAU) - Math.PI);
+  }
+
+  function lineOfSightBlocked(d, f) {
+    const groundY = Math.max(heightAt(f.x, f.z), (state.terrain ? state.terrain.waterLevel : 0) * 0.9);
+    const steps = 6;
+    for (let s = 1; s < steps; s++) {
+      const t = s / steps;
+      const x = d.pos.x + (f.x - d.pos.x) * t;
+      const z = d.pos.z + (f.z - d.pos.z) * t;
+      const rayY = d.pos.y + (groundY + 0.35 - d.pos.y) * t;
+      if (heightAt(x, z) > rayY - 0.2) return true;
+      for (const b of state.terrain ? state.terrain.buildings : []) {
+        if (Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2 &&
+            rayY < heightAt(b.x, b.z) + b.h + 0.25) return true;
+      }
+    }
+    return false;
+  }
+
+  function canObserve(d, f, range, fov) {
+    if (!d || d.failed || !d.trusted) return false;
+    if (d.autonomyMode === "hold" || d.autonomyMode === "landing" || d.autonomyMode === "failed") return false;
+    if (Math.hypot(d.pos.x - f.x, d.pos.z - f.z) > range + f.r * 0.35) return false;
+    const bearing = Math.atan2(f.z - d.pos.z, f.x - d.pos.x);
+    const halfFov = (fov * Math.PI / 180) / 2;
+    if (angleBetween(bearing, d.heading) > halfFov) return false;
+    return !lineOfSightBlocked(d, f);
+  }
+
+  function observationChannel(d) {
+    return d.idx % 5 === 0 ? "bulk" : "telemetry";
+  }
+
+  function queueObservation(record, source) {
+    const ch = state.channels[record.channel] || state.channels.telemetry;
+    const hops = source.hops === null || source.hops === undefined ? 4 : source.hops;
+    const delay = CFG.mapSyncStep * 0.7 + ch.latency * 4 * (1 + hops * 0.5) + (source.idx % 3) * 0.12;
+    state.pendingObservations.push(Object.assign({}, record, { deliverAt: state.time + delay }));
+    if (state.pendingObservations.length > CFG.maxPending) state.pendingObservations.shift();
+  }
+
+  function applyObservation(record) {
+    const f = state.features.find((x) => x.id === record.featureId);
+    if (!f || record.expiresAt <= state.time) {
+      state.stats.expiredObservations++;
+      return;
+    }
+    if (record.epoch !== state.coordination.epoch) {
+      state.stats.staleRejected++;
+      return;
+    }
+    f.observedAt = record.at;
+    f.observers = record.observers.length;
+    f.confidence = record.confidence;
+    f.fused = record.observers.length >= 2;
+    f.sourceDrone = record.source;
+    f.observationId = record.id;
+    f.dataType = record.dataType;
+    state.observations.push(record);
+    if (state.observations.length > CFG.maxObservations) state.observations.shift();
+  }
+
   function updateMapFeatures(dt) {
     const sit = currentSituation();
-    const range = CFG.sensorRange * sit.sensor;
     const hazardTypes = { fire: true, flood: true, hotspot: true, hazard: true };
 
-    /* Uplink sync gate: records only refresh on a shared-map sync tick. A slow
-       uplink therefore makes the whole map visibly age between updates. */
+    // Physical feature motion happens continuously; shared-map truth is
+    // refreshed only when a routed observation is actually delivered.
+    for (const f of state.features) {
+      if (sit.wind && (f.type === "smoke" || f.type === "fire" || f.type === "hotspot")) {
+        const k = Math.min(6, state.time * 0.05);
+        f.x = clampToArena(f.homeX + sit.wind.x * k);
+        f.z = clampToArena(f.homeZ + sit.wind.z * k);
+      } else if (sit.drift && (f.type === "survivor" || f.type === "vehicle")) {
+        const wave = state.time * 0.11 + f.phase;
+        f.x = clampToArena(f.homeX + Math.cos(wave) * 2.5);
+        f.z = clampToArena(f.homeZ + Math.sin(wave * 0.8) * 2.5);
+      } else {
+        f.x = f.homeX;
+        f.z = f.homeZ;
+      }
+    }
+
     state.mapSyncAcc += dt * (sit.sync || 1);
     let syncTick = false;
     if (state.mapSyncAcc >= CFG.mapSyncStep) {
@@ -1012,62 +1423,69 @@
       syncTick = true;
     }
 
-    for (const f of state.features) {
-      if (sit.wind && (f.type === "smoke" || f.type === "fire" || f.type === "hotspot")) {
-        // Crosswind advects airborne hazards downwind (capped so the
-        // feature stays inside the map and home stays recoverable).
-        const k = Math.min(3, state.time * 0.05);
-        f.x = f.homeX + sit.wind.x * k;
-        f.z = f.homeZ + sit.wind.z * k;
-      } else if (sit.drift && (f.type === "survivor" || f.type === "vehicle")) {
-        const wave = state.time * 0.11 + f.phase;
-        f.x = f.homeX + Math.cos(wave) * 1.25;
-        f.z = f.homeZ + Math.sin(wave * 0.8) * 1.25;
-      } else {
-        f.x = f.homeX;
-        f.z = f.homeZ;
-      }
+    if (syncTick) {
+      const range = CFG.sensorRange * sit.sensor * (sit.night ? 0.86 : 1);
+      const fov = CFG.sensorFov * (sit.night ? 0.82 : 1);
+      for (const f of state.features) {
+        const observerIds = [];
+        for (const d of state.activeDrones) {
+          if (canObserve(d, f, range, fov)) observerIds.push(d.id);
+        }
+        if (!observerIds.length) continue;
 
-      const observerIds = [];
-      for (const d of state.activeDrones) {
-        if (!d.connected || !d.trusted) continue;
-        if (Math.hypot(d.pos.x - f.x, d.pos.z - f.z) <= range + f.r * 0.25) observerIds.push(d.id);
-      }
-      const observers = observerIds.length;
-      if (observers && syncTick) f.observedAt = state.time;
-      f.observers = observers;
-      f.age = Math.max(0, state.time - f.observedAt);
-      const fused = observers >= 2;
-      f.confidence = Math.round(clamp((fused ? 88 + observers * 3 : 99 - f.age * 3.2) - nextRandom() * 2, 42, 99));
-      f.liveState = f.age <= sit.liveFor ? "live" : f.age <= sit.staleFor ? "stale" : "lost";
-      f.fused = fused;
-      f.dataType = dataTypeFor(f.type);
-      f.expiresAt = f.observedAt + CFG.observationTtl;
-
-      if (observers && syncTick) {
-        // One structured observation per sync tick for this feature. Multiple
-        // independent observers raise confidence through simple sensor fusion.
-        const source = observerIds[Math.floor(nextRandom() * observerIds.length)];
-        const status = f.liveState === "live" ? "confirmed" : f.liveState === "stale" ? "estimated" : "historical";
-        const observationId = "O" + String(++state.obsSeq).padStart(4, "0");
-        f.sourceDrone = source;
-        f.observationId = observationId;
-        state.observations.push({
-          id: observationId,
+        const source = state.drones.find((d) => d.id === observerIds[0]);
+        if (!source) continue;
+        const channel = observationChannel(source);
+        const confidence = Math.round(clamp(
+          76 + observerIds.length * 7 + (sit.sensor - 0.6) * 18 + Math.sin(f.phase) * 3,
+          55, 99
+        ));
+        const at = Math.round(state.time * 10) / 10;
+        const record = {
+          id: "O" + String(++state.obsSeq).padStart(4, "0"),
           featureId: f.id,
-          source,
+          source: source.id,
           observers: observerIds.slice(),
-          at: Math.round(state.time * 10) / 10,
+          at,
           x: Math.round(f.x * 10) / 10,
           z: Math.round(f.z * 10) / 10,
-          confidence: f.confidence,
-          dataType: f.dataType,
-          status,
-          expiresAt: Math.round((state.time + CFG.observationTtl) * 10) / 10
-        });
-        if (state.observations.length > CFG.maxObservations) state.observations.shift();
+          confidence,
+          dataType: dataTypeFor(f.type),
+          status: observerIds.length >= 2 ? "confirmed" : "provisional",
+          expiresAt: Math.round((state.time + CFG.observationTtl) * 10) / 10,
+          channel,
+          epoch: state.coordination.epoch
+        };
+        state.stats.observations++;
+        if (source.connected && source.hops !== null) {
+          queueObservation(record, source);
+        } else {
+          source.localQueue.push(record);
+          if (source.localQueue.length > CFG.maxLocalQueue) source.localQueue.shift();
+        }
       }
 
+      // A restored route flushes the drone's onboard buffer. Records still pay
+      // the channel delay, so reconnection is visible rather than instantaneous.
+      for (const d of state.activeDrones) {
+        if (!d.connected || !d.localQueue.length) continue;
+        const held = d.localQueue.splice(0, d.localQueue.length);
+        for (const record of held) queueObservation(record, d);
+      }
+
+      for (let i = state.pendingObservations.length - 1; i >= 0; i--) {
+        const record = state.pendingObservations[i];
+        if (state.time < record.deliverAt) continue;
+        state.pendingObservations.splice(i, 1);
+        applyObservation(record);
+      }
+    }
+
+    for (const f of state.features) {
+      f.age = Math.max(0, state.time - f.observedAt);
+      f.liveState = f.age <= sit.liveFor ? "live" : f.age <= sit.staleFor ? "stale" : "lost";
+      f.confidence = Math.round(clamp(f.confidence - Math.max(0, f.age - sit.liveFor) * 1.1, 42, 99));
+      f.expiresAt = f.observedAt + CFG.observationTtl;
       if (sit.spread && hazardTypes[f.type]) {
         const grow = f.liveState === "live" ? 0.022 : sit.spread;
         f.r = Math.min(f.baseR * 2.2, f.r + grow * Math.max(dt, 0));
@@ -1078,6 +1496,32 @@
   }
 
   /* ---------------- network model ---------------- */
+
+  // Radio links are not magic: raised terrain and structures absorb the
+  // signal. Post antennas sit above their pads; aircraft radios sit above the
+  // airframe. Launch and landing use the short-range control link instead.
+  function radioLineBlocked(a, b, idA, idB) {
+    if (!state.terrain) return false;
+    const postA = idA === "MAIN" || idA === "BKUP";
+    const postB = idB === "MAIN" || idB === "BKUP";
+    if (!postA && a.y < heightAt(a.x, a.z) + 1.5) return false;
+    if (!postB && b.y < heightAt(b.x, b.z) + 1.5) return false;
+    const ay = a.y + (postA ? 3.2 : 0.8);
+    const by = b.y + (postB ? 3.2 : 0.8);
+    const steps = 8;
+    for (let s = 1; s < steps; s++) {
+      const t = s / steps;
+      const x = lerp(a.x, b.x, t), z = lerp(a.z, b.z, t);
+      const rayY = lerp(ay, by, t);
+      if (heightAt(x, z) > rayY - 0.4) return true;
+      for (const building of state.terrain.buildings) {
+        if (Math.abs(x - building.x) < building.w / 2 + 0.3 &&
+            Math.abs(z - building.z) < building.d / 2 + 0.3 &&
+            rayY < heightAt(building.x, building.z) + building.h + 0.3) return true;
+      }
+    }
+    return false;
+  }
 
   function isBlocked(a, b, idA, idB) {
     if (state.storm) {
@@ -1096,6 +1540,7 @@
         if (pairKey(s.a, s.b) === key) return "severed";
       }
     }
+    if (radioLineBlocked(a, b, idA, idB)) return "terrain";
     return null;
   }
 
@@ -1296,16 +1741,29 @@
         connectedCount++;
         hopSum += d.hops;
         d.status = "connected";
-        d.obsAge = 0.8 + d.hops * 0.45 + (d.idx % 3) * 0.16;
+        const mine = state.observations.filter((o) => o.source === d.id);
+        const pending = state.pendingObservations.filter((o) => o.source === d.id);
+        d.deliveryDelay = pending.length
+          ? pending.reduce((sum, o) => sum + Math.max(0, o.deliverAt - o.at), 0) / pending.length
+          : 0;
+        d.bufferedObservations = d.localQueue.length;
+        const lastAt = mine.length ? mine[mine.length - 1].at : state.time - 1.2;
+        d.obsAge = Math.max(0.2, state.time - lastAt);
         freshest = Math.min(freshest, d.obsAge);
       } else if (g) {
         d.status = "delayed";
-        d.obsAge = 5 + (state.time - g.since) * 0.55;
+        d.bufferedObservations = d.localQueue.length;
+        const mine = state.observations.filter((o) => o.source === d.id);
+        const lastAt = mine.length ? mine[mine.length - 1].at : state.time - 5;
+        d.obsAge = Math.max(1.2, state.time - lastAt);
         groupMembers++;
         freshest = Math.min(freshest, d.obsAge);
       } else {
         d.status = "isolated";
-        d.obsAge = 5;
+        d.bufferedObservations = d.localQueue.length;
+        const mine = state.observations.filter((o) => o.source === d.id);
+        const lastAt = mine.length ? mine[mine.length - 1].at : state.time - 8;
+        d.obsAge = Math.max(3, state.time - lastAt);
         freshest = Math.min(freshest, d.obsAge);
       }
     }
@@ -1477,6 +1935,11 @@
       }
       refs.state.className = stateClass;
       refs.state.textContent = label;
+      refs.row.title =
+        d.id + " · " + (d.mission || "unassigned") +
+        " · " + (d.autonomyMode || "idle") +
+        " · " + Math.round(d.battery) + "% battery" +
+        (d.obstacleState && d.obstacleState !== "clear" ? " · " + d.obstacleState : "");
     }
     el.fleetCount.textContent = active + " units";
   }
@@ -1646,12 +2109,14 @@
       el.inspector.innerHTML =
         '<div class="inspector-ident">' +
         '<span class="status-dot ' + dot + '"></span>' +
-        "<div><strong>" + (isMain ? "Main AI" : "Backup AI") + "</strong>" +
-        "<small>" + (isMain ? "central coordinator" : "state replica") + "</small></div>" +
+        "<div><strong>" + (isMain ? "Main post" : "Backup post") + "</strong>" +
+        "<small>" + (isMain ? "fixed ground station · map start" : "fixed ground station · map end") + "</small></div>" +
         '<span class="inspector-tag ' + (!active ? "failed" : "") + '">' + tag + "</span>" +
         "</div>" +
         '<dl class="inspector-rows">' +
         row("Authority", active ? (acting ? "primary" : "standby") : "unavailable", active ? (acting ? "ok" : "") : "bad") +
+        row("Station", isMain ? "ground post · start of map" : "ground post · end of map", "") +
+        row("Post links", state.edges.filter((e) => e.kind === "main" || e.kind === "backup").length + " drone uplinks", "") +
         row("Term / epoch", state.coordination.term + " / " + state.coordination.epoch, "") +
         row("Quorum", state.coordination.quorum + " / " + CFG.quorumNeeded + " witnesses", state.coordination.quorum < CFG.quorumNeeded ? "warn" : "ok") +
         row("Split-brain guard", state.coordination.splitBrainRisk ? "BLOCKED" : "armed", state.coordination.splitBrainRisk ? "bad" : "ok") +
@@ -1708,12 +2173,19 @@
       '<dl class="inspector-rows">' +
       row("Identity", d.identity + (d.trusted ? " · verified" : " · revoked"), d.trusted ? "ok" : "bad") +
       row("AI level", d.leader ? "drone + group coordinator" : "drone AI · local safety", "") +
+      row("Mission", d.mission || "unassigned", "") +
+      row("Flight mode", AUTONOMY_MODES.find((m) => m.id === d.autonomyMode)?.label || d.autonomyMode || "unknown", "") +
+      row("Waypoint", d.waypoints && d.waypoints.length ? (d.wpIndex % d.waypoints.length) + 1 + " / " + d.waypoints.length : "none", "") +
+      row("Heading", Math.round((d.heading * 180 / Math.PI + 360) % 360) + "° · FOV " + CFG.sensorFov + "°", "") +
+      row("Obstacle", d.obstacleState || "clear", d.obstacleState && d.obstacleState !== "clear" ? "warn" : "ok") +
       row("Safety", d.safetyMode, d.safetyMode === "nominal" ? "ok" : "warn") +
       row("Status", d.failed ? "unresponsive" : d.connected ? "connected" : "local group", d.failed ? "bad" : d.connected ? "ok" : "warn") +
       row("Hops", d.hops != null ? String(d.hops) : "no route", d.hops != null && d.hops > 3 ? "warn" : "") +
       row("Uplink", parent || (d.connected ? state.acting : d.leader ? "local lead" : "buffered"), "") +
       row("Observation", d.failed || !d.connected ? obsLabel : "live", obsTone) +
       row("Freshness", Math.round(d.obsAge) + "s", d.obsAge > 20 ? "bad" : d.obsAge > 6 ? "warn" : "ok") +
+      row("Delivery delay", d.deliveryDelay ? d.deliveryDelay.toFixed(1) + "s" : "none queued", d.deliveryDelay > 3 ? "warn" : "") +
+      row("Onboard buffer", d.bufferedObservations + " observations", d.bufferedObservations ? "warn" : "ok") +
       row("Last sync", d.failed ? "before loss" : d.connected ? "continuous" : "when linked", "") +
       row(
         "Last record",
@@ -1744,12 +2216,12 @@
 
   function inspectorNodeSignature(id) {
     if (id === "MAIN" || id === "BKUP") {
-      return [state.main.active, state.backup.active, state.acting, state.replicaAge.toFixed(0), state.records | 0, state.buffered | 0, state.coordination.epoch, state.coordination.quorum].join(",");
+      return [state.main.active, state.backup.active, state.acting, state.replicaAge.toFixed(0), state.records | 0, state.buffered | 0, state.coordination.epoch, state.coordination.quorum, state.edges.length].join(",");
     }
     const d = state.drones.find((x) => x.id === id);
     if (!d) return "missing";
     const lastObs = state.observations.slice().reverse().find((o) => o.source === id);
-    return [d.failed, d.connected, d.hops, d.group, d.leader, Math.round(d.battery), Math.round(d.obsAge), d.trusted, d.safetyMode, lastObs ? lastObs.id : ""].join(",");
+    return [d.failed, d.connected, d.hops, d.group, d.leader, Math.round(d.battery), Math.round(d.obsAge), d.trusted, d.safetyMode, lastObs ? lastObs.id : "", d.mission, d.autonomyMode, d.wpIndex, d.obstacleState, d.bufferedObservations].join(",");
   }
 
   function row(label, value, tone) {
@@ -2051,7 +2523,11 @@
         d.battery = Math.max(86, d.battery);
       }
       d.failedAt = 0;
+      d.rtlNotified = false;
+      d.localQueue = [];
     }
+    state.pendingObservations = [];
+    assignMissions();
     markFailedDroneList();
   }
 
@@ -2156,10 +2632,11 @@
     state.selected = null;
     state.view = "command";
     state.recall = false;
-    state.stats = { packets: 0, failovers: 0, reconciliations: 0 };
+    state.stats = { packets: 0, failovers: 0, reconciliations: 0, observations: 0, expiredObservations: 0, staleRejected: 0 };
     state.audit = [];
     state.auditSeq = 0;
     state.observations = [];
+    state.pendingObservations = [];
     state.obsSeq = 0;
     state.coordination.term = 1;
     state.coordination.epoch = 1;
@@ -2566,12 +3043,19 @@
     return url.toString();
   }
 
+  // Rapid map/situation/scenario changes should not flood the browser history
+  // API; only the final state of a burst needs to be shareable.
+  let syncURLTimer = 0;
   function syncURL() {
-    try {
-      window.history.replaceState(null, "", buildShareURL(false));
-    } catch (e) {
-      /* file:// or older browsers may reject history updates */
-    }
+    if (syncURLTimer) clearTimeout(syncURLTimer);
+    syncURLTimer = setTimeout(() => {
+      syncURLTimer = 0;
+      try {
+        window.history.replaceState(null, "", buildShareURL(false));
+      } catch (e) {
+        /* file:// or older browsers may reject history updates */
+      }
+    }, 120);
   }
 
   function readRunURL() {
@@ -2627,8 +3111,18 @@
     return {
       app: "NEXUS AI",
       kind: "simulation-run",
-      version: "2.0.0",
+      version: "5.0.0",
       generatedAt: new Date().toISOString(),
+      world: {
+        halfExtent: WORLD.halfExtent,
+        width: WORLD.halfExtent * 2,
+        scale: WORLD.scale,
+        gridN: WORLD.gridN,
+        posts: {
+          main: { x: MAIN_POS.x, z: MAIN_POS.z },
+          backup: { x: BKUP_POS.x, z: BKUP_POS.z }
+        }
+      },
       seed: state.seed,
       scenario: state.scenario
         ? { id: state.scenario, label: scenarioLabel() }
@@ -2648,6 +3142,21 @@
         localGroups: state.groups.length,
         avgHops: Number(state.avgHops.toFixed(2))
       },
+      fleet: state.drones.map((d) => ({
+        id: d.id,
+        mission: d.mission,
+        flightMode: d.autonomyMode,
+        waypointIndex: d.wpIndex,
+        waypointCount: d.waypoints.length,
+        waypoints: d.waypoints.map((wp) => ({ x: wp.x, z: wp.z, type: wp.type })),
+        headingDegrees: Math.round((d.heading * 180 / Math.PI + 360) % 360),
+        sensorFovDegrees: CFG.sensorFov,
+        position: { x: Math.round(d.pos.x * 10) / 10, y: Math.round(d.pos.y * 10) / 10, z: Math.round(d.pos.z * 10) / 10 },
+        obstacleState: d.obstacleState,
+        onboardObservations: d.bufferedObservations,
+        deliveryDelaySeconds: Number(d.deliveryDelay.toFixed(2)),
+        windOffset: { x: Number(d.windOffset.x.toFixed(2)), z: Number(d.windOffset.z.toFixed(2)) }
+      })),
       coordinators: {
         mainActive: state.main.active,
         backupActive: state.backup.active,
@@ -2657,6 +3166,14 @@
       },
       architecture: {
         aiLevels: AI_LEVELS.map((level) => ({ id: level.id, label: level.label, role: level.role })),
+        autonomy: {
+          modes: AUTONOMY_MODES.map((m) => ({ id: m.id, label: m.label })),
+          cruiseSpeed: CFG.cruiseSpeed,
+          sensorFovDegrees: CFG.sensorFov,
+          obstacleMargin: CFG.obstacleMargin,
+          pendingObservations: state.pendingObservations.length,
+          maxPending: CFG.maxPending
+        },
         coordination: {
           term: state.coordination.term,
           epoch: state.coordination.epoch,
@@ -2730,6 +3247,8 @@
           confidence: o.confidence,
           dataType: o.dataType,
           status: o.status,
+          channel: o.channel,
+          epoch: o.epoch,
           expiresAtSeconds: o.expiresAt
         })),
         records: Math.round(state.records),
@@ -2755,7 +3274,10 @@
       counters: {
         packetsSpawned: state.stats.packets,
         failovers: state.stats.failovers,
-        reconciliations: state.stats.reconciliations
+        reconciliations: state.stats.reconciliations,
+        observationsQueued: state.stats.observations,
+        observationsExpired: state.stats.expiredObservations,
+        observationsRejectedEpoch: state.stats.staleRejected
       },
       telemetry: {
         intervalSeconds: 0.5,
@@ -2828,6 +3350,9 @@
       ["scenario_label", s.scenario ? s.scenario.label : "Free run"],
       ["map_id", s.map.id],
       ["map_label", s.map.label],
+      ["world_extent", s.world.width],
+      ["main_post", s.world.posts.main.x + "," + s.world.posts.main.z],
+      ["backup_post", s.world.posts.backup.x + "," + s.world.posts.backup.z],
       ["situation_id", s.map.situation.id],
       ["situation_label", s.map.situation.label],
       ["features_live", s.map.features.filter((f) => f.state === "live").length],
@@ -2839,6 +3364,8 @@
       ["drones_total", s.nodes.drones],
       ["drones_connected", s.nodes.connected],
       ["drones_failed", s.nodes.failedDrones.join(" ")],
+      ["drone_flight_modes", s.fleet.map((d) => d.id + ":" + d.flightMode).join(" ")],
+      ["drone_missions", s.fleet.map((d) => d.id + ":" + d.mission).join(" ")],
       ["local_groups", s.nodes.localGroups],
       ["avg_hops", s.nodes.avgHops],
       ["main_active", s.coordinators.mainActive],
@@ -2869,6 +3396,10 @@
       ["packets_spawned", s.counters.packetsSpawned],
       ["failovers", s.counters.failovers],
       ["reconciliations", s.counters.reconciliations],
+      ["observations_queued", s.counters.observationsQueued],
+      ["observations_expired", s.counters.observationsExpired],
+      ["observations_epoch_rejected", s.counters.observationsRejectedEpoch],
+      ["pending_observations", s.architecture.autonomy.pendingObservations],
       ["storm", s.faults.storm],
       ["interference", s.faults.interference],
       ["recall", s.faults.recall],
@@ -3021,7 +3552,7 @@
 
   function updateSim(dt) {
     state.time += dt;
-    updateDronePositions(dt);
+    updateAutonomy(dt);
     updateMapFeatures(dt);
 
     const coord = state.coordination;
@@ -3086,8 +3617,8 @@
 
     if (state.recall && state.time >= state.recallUntil) {
       state.recall = false;
-      logEvent("Recall complete — fleet resumed patrol pattern", "ok");
-      toast("Fleet resumed patrol. All holding records were kept.", "ok");
+      logEvent("Recall complete — fleet resumed assigned missions", "ok");
+      toast("Fleet resumed its mission routes. All holding records were kept.", "ok");
     }
 
     state.netAcc = (state.netAcc || 0) + dt;
@@ -3477,7 +4008,7 @@
     c = [c[0] * k, c[1] * k, c[2] * k];
     if (scorchVal > 0.01) c = mixRGB(c, [0.07, 0.05, 0.03], scorchVal * 0.6);
     const r = Math.max(Math.abs(sx), Math.abs(sz));
-    const fade = sstep(15.5, 19.5, r);
+    const fade = sstep(WORLD.halfExtent * 0.79, WORLD.halfExtent, r);
     if (fade > 0) c = mixRGB(c, [0.012, 0.04, 0.07], fade * 0.6);
     return "rgb(" + Math.round(c[0] * 255) + "," + Math.round(c[1] * 255) + "," + Math.round(c[2] * 255) + ")";
   }
@@ -3800,7 +4331,8 @@
       state.ctx.fillRect(0, 0, state.W, state.H);
     }
     const map = currentMap();
-    const corner = projectPoint({ x: -19.5, y: heightAt(-19.5, -19.5) + 0.02, z: -19.5 });
+    const e = -WORLD.halfExtent;
+    const corner = projectPoint({ x: e, y: heightAt(e, e) + 0.02, z: e });
     if (corner && state.layers.labels) {
       const ctx = state.ctx;
       ctx.fillStyle = map.palette.edge;
@@ -4270,17 +4802,17 @@
   }
 
   function makeRain() {
-    const COUNT = 700;
+    const COUNT = WORLD.rainCount;
     const pos = new Float32Array(COUNT * 3);
     for (let i = 0; i < COUNT; i++) {
-      pos[i * 3] = (Math.random() * 2 - 1) * 30;
-      pos[i * 3 + 1] = Math.random() * 26;
-      pos[i * 3 + 2] = (Math.random() * 2 - 1) * 30;
+      pos[i * 3] = (Math.random() * 2 - 1) * WORLD.rainSpread;
+      pos[i * 3 + 1] = Math.random() * WORLD.rainHeight;
+      pos[i * 3 + 2] = (Math.random() * 2 - 1) * WORLD.rainSpread;
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     const mat = new THREE.PointsMaterial({
-      color: 0x9fd8f0, size: 0.075, transparent: true, opacity: 0.5,
+      color: 0x9fd8f0, size: 0.1, transparent: true, opacity: 0.46,
       depthWrite: false, blending: THREE.AdditiveBlending
     });
     const pts = new THREE.Points(geo, mat);
@@ -4311,18 +4843,18 @@
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0x050b13);
-      scene.fog = new THREE.FogExp2(0x0a1a26, 0.0075);
-      const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 400);
+      scene.fog = new THREE.FogExp2(0x0a1a26, 0.0048);
+      const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 520);
       const ambient = new THREE.AmbientLight(0x8ab4d8, 0.26);
-      const hemi = new THREE.HemisphereLight(0xbcdcf5, 0x26332c, 0.62);
-      const sun = new THREE.DirectionalLight(0xffedcf, 1.32);
-      sun.position.set(34, 52, 24);
+      const hemi = new THREE.HemisphereLight(0xc4ddf2, 0x2b352d, 0.62);
+      const sun = new THREE.DirectionalLight(0xffdfb2, 1.32);
+      sun.position.set(46, 66, 32);
       sun.castShadow = true;
-      sun.shadow.mapSize.set(1536, 1536);
-      sun.shadow.camera.left = -22;
-      sun.shadow.camera.right = 22;
-      sun.shadow.camera.top = 22;
-      sun.shadow.camera.bottom = -22;
+      sun.shadow.mapSize.set(2048, 2048);
+      sun.shadow.camera.left = -WORLD.shadowExtent;
+      sun.shadow.camera.right = WORLD.shadowExtent;
+      sun.shadow.camera.top = WORLD.shadowExtent;
+      sun.shadow.camera.bottom = -WORLD.shadowExtent;
       sun.shadow.camera.near = 1;
       sun.shadow.camera.far = 130;
       sun.shadow.bias = -0.0007;
@@ -4347,10 +4879,16 @@
         metal: makeRoofTexture("metal"),
         asphalt: makeAsphaltTexture()
       };
+      tex.ground.repeat.set(14, 14);
+      tex.waterNormal.repeat.set(22, 22);
+      tex.groundTerrainNormal = tex.groundNormal.clone();
+      tex.groundTerrainNormal.wrapS = tex.groundTerrainNormal.wrapT = THREE.RepeatWrapping;
+      tex.groundTerrainNormal.repeat.set(14, 14);
+      tex.groundTerrainNormal.needsUpdate = true;
       const envCube = makeEnvCube();
       const skyTex = makeSkyTexture();
       const sky = new THREE.Mesh(
-        new THREE.SphereGeometry(170, 32, 20),
+        new THREE.SphereGeometry(WORLD.skyRadius, 32, 20),
         new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false, depthWrite: false })
       );
       scene.add(sky);
@@ -4359,8 +4897,8 @@
         map: sunGlow, color: 0xffd9a0, transparent: true, opacity: 0.72,
         depthWrite: false, fog: false, blending: THREE.AdditiveBlending
       }));
-      sunSprite.scale.set(20, 20, 1);
-      sunSprite.position.set(95, 62, -95);
+      sunSprite.scale.set(26, 26, 1);
+      sunSprite.position.set(128, 76, -128);
       scene.add(sunSprite);
       const rain = makeRain();
       scene.add(rain.pts);
@@ -4404,8 +4942,8 @@
     const map = MAPS[mapId] || MAPS.wildfire;
     const wl = cache.waterLevel;
     // --- terrain: textured hillfield with surface detail and a solid skirt ---
-    const SEG = 120;
-    const tGeo = new THREE.PlaneGeometry(39, 39, SEG, SEG);
+    const SEG = WORLD.terrainSegments;
+    const tGeo = new THREE.PlaneGeometry(WORLD.halfExtent * 2, WORLD.halfExtent * 2, SEG, SEG);
     tGeo.rotateX(-Math.PI / 2);
     const tPos = tGeo.attributes.position;
     const tCol = new Float32Array(tPos.count * 3);
@@ -4431,7 +4969,7 @@
       cArr = [cArr[0] * k, cArr[1] * k, cArr[2] * k];
       if (sc > 0.01) cArr = mixRGB(cArr, [0.07, 0.05, 0.03], sc * 0.6);
       const r = Math.max(Math.abs(x), Math.abs(z));
-      const fade = sstep(15.5, 19.5, r);
+      const fade = sstep(WORLD.halfExtent * 0.79, WORLD.halfExtent, r);
       if (fade > 0) cArr = mixRGB(cArr, [0.012, 0.04, 0.07], fade * 0.6);
       tColor.setRGB(cArr[0], cArr[1], cArr[2]);
       tCol[i * 3] = tColor.r; tCol[i * 3 + 1] = tColor.g; tCol[i * 3 + 2] = tColor.b;
@@ -4441,7 +4979,7 @@
     const terrainMesh = new THREE.Mesh(tGeo, new THREE.MeshStandardMaterial({
       vertexColors: true,
       map: T.tex.ground,
-      normalMap: T.tex.groundNormal,
+      normalMap: T.tex.groundTerrainNormal,
       normalScale: new THREE.Vector2(0.7, 0.7),
       roughness: 0.96,
       metalness: 0
@@ -4449,13 +4987,13 @@
     terrainMesh.receiveShadow = true;
     env.add(terrainMesh);
     const skirt = new THREE.Mesh(
-      new THREE.BoxGeometry(39.2, 1.8, 39.2),
+      new THREE.BoxGeometry(WORLD.halfExtent * 2 + 0.2, 1.8, WORLD.halfExtent * 2 + 0.2),
       new THREE.MeshStandardMaterial({ map: T.tex.concrete, color: 0x2b3840, roughness: 0.95 })
     );
     skirt.position.y = -0.92;
     env.add(skirt);
     // --- water: reflective surface with animated ripple normals ---
-    const waterGeo = new THREE.PlaneGeometry(39, 39, 56, 56);
+    const waterGeo = new THREE.PlaneGeometry(WORLD.halfExtent * 2, WORLD.halfExtent * 2, 72, 72);
     waterGeo.rotateX(-Math.PI / 2);
     const waterMat = new THREE.MeshPhongMaterial({
       color: new THREE.Color(terr.water[0], terr.water[1], terr.water[2]),
@@ -4808,16 +5346,16 @@
     env.add(gridGroup);
     {
       const pts = [];
-      const span = 19.5, stepG = 3.25;
+      const span = WORLD.halfExtent, stepG = (span * 2) / 12, detail = 1.5 * WORLD.scale;
       for (let v = -span; v <= span + 0.001; v += stepG) {
-        for (let z = -span; z < span - 0.001; z += 1.5) pts.push(v, heightAt(v, z) + 0.04, z, v, heightAt(v, z + 1.5) + 0.04, z + 1.5);
-        for (let x = -span; x < span - 0.001; x += 1.5) pts.push(x, heightAt(x, v) + 0.04, v, x + 1.5, heightAt(x + 1.5, v) + 0.04, v);
+        for (let z = -span; z < span - 0.001; z += detail) pts.push(v, heightAt(v, z) + 0.04, z, v, heightAt(v, z + detail) + 0.04, z + detail);
+        for (let x = -span; x < span - 0.001; x += detail) pts.push(x, heightAt(x, v) + 0.04, v, x + detail, heightAt(x + detail, v) + 0.04, v);
       }
       const g = new THREE.BufferGeometry();
       g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
       const lines = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x58a0be, transparent: true, opacity: 0.12 }));
       gridGroup.add(lines);
-      for (const radius of [6, 12, 18]) {
+      for (const radius of [6, 12, 18].map((r) => r * WORLD.scale)) {
         const rp = [];
         for (let i = 0; i <= 72; i++) {
           const a = (i / 72) * TAU;
@@ -4829,7 +5367,8 @@
         gridGroup.add(new THREE.Line(rg, new THREE.LineBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.14 })));
       }
     }
-    // The coordinators are airborne command drones now, built with the fleet below.
+    // Ground operator posts are added as fixed installations below, separate
+    // from the airborne fleet and its distinct post-to-drone link type.
     // --- feature truth + markers ---
     const featureGroup = new THREE.Group();
     env.add(featureGroup);
@@ -5191,8 +5730,8 @@
     pktPts.frustumCulled = false;
     env.add(pktPts);
     // storm + interference
-    const stormMesh = new THREE.Mesh(new THREE.BoxGeometry(19.5 - STORM_X, 11.5, 34), new THREE.MeshBasicMaterial({ color: 0xfb7185, transparent: true, opacity: 0.08, depthWrite: false }));
-    stormMesh.position.set((STORM_X + 19.5) / 2, 5.75, 0);
+    const stormMesh = new THREE.Mesh(new THREE.BoxGeometry(WORLD.halfExtent - STORM_X, 18, WORLD.halfExtent * 2), new THREE.MeshBasicMaterial({ color: 0xfb7185, transparent: true, opacity: 0.09, depthWrite: false }));
+    stormMesh.position.set((STORM_X + WORLD.halfExtent) / 2, 9, 0);
     stormMesh.visible = false;
     env.add(stormMesh);
     const stormEdge = new THREE.LineSegments(new THREE.EdgesGeometry(stormMesh.geometry), new THREE.LineBasicMaterial({ color: 0xfb7185, transparent: true, opacity: 0.3 }));
@@ -5291,7 +5830,7 @@
         const drift = sit.wind ? sit.wind.x * 0.12 : 0.025;
         for (let i = 0; i < p.length; i += 3) {
           p[i + 1] -= 0.26 + (i % 9) * 0.02;
-          if (p[i + 1] < 0) p[i + 1] = 26;
+          if (p[i + 1] < 0) p[i + 1] = WORLD.rainHeight;
           p[i] += drift;
           if (p[i] > 30) p[i] = -30;
         }
@@ -5719,19 +6258,20 @@
   function drawGrid() {
     if (!state.layers.grid) return;
     const ctx = state.ctx;
-    const span = 19.5;
-    const step = 3.25;
+    const span = WORLD.halfExtent;
+    const step = (span * 2) / 12;
+    const detail = 1.5 * WORLD.scale;
     ctx.lineWidth = 1;
     ctx.strokeStyle = "rgba(88, 160, 190, 0.12)";
     for (let v = -span; v <= span + 0.001; v += step) {
       // terrain-following grid lines (arena battlefield look)
       let line = [];
-      for (let z = -span; z <= span + 0.001; z += 1.5) line.push({ x: v, y: heightAt(v, z) + 0.04, z });
+      for (let z = -span; z <= span + 0.001; z += detail) line.push({ x: v, y: heightAt(v, z) + 0.04, z });
       ctx.beginPath();
       polyline(line, false);
       ctx.stroke();
       line = [];
-      for (let x = -span; x <= span + 0.001; x += 1.5) line.push({ x, y: heightAt(x, v) + 0.04, z: v });
+      for (let x = -span; x <= span + 0.001; x += detail) line.push({ x, y: heightAt(x, v) + 0.04, z: v });
       ctx.beginPath();
       polyline(line, false);
       ctx.stroke();
@@ -5739,7 +6279,7 @@
 
     ctx.strokeStyle = "rgba(34, 211, 238, 0.14)";
     ctx.lineWidth = 1;
-    for (const radius of [6, 12, 18]) {
+    for (const radius of [6, 12, 18].map((r) => r * WORLD.scale)) {
       const pts = [];
       for (let i = 0; i <= 72; i++) {
         const a = (i / 72) * TAU;
@@ -5847,32 +6387,37 @@
   function drawBeam() {
     if (!state.main.active) return;
     const ctx = state.ctx;
-    const a = projectPoint({ x: 0, y: heightAt(0, 0) + 0.1, z: 0 });
-    const b = projectPoint(MAIN_POS);
+    const a = projectPoint({ x: MAIN_POS.x, y: MAIN_POS.y + 0.1, z: MAIN_POS.z });
+    const b = projectPoint({ x: BKUP_POS.x, y: BKUP_POS.y + 0.1, z: BKUP_POS.z });
     if (!a || !b) return;
     const g = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
-    g.addColorStop(0, "rgba(34, 211, 238, 0.02)");
-    g.addColorStop(0.6, "rgba(34, 211, 238, 0.16)");
-    g.addColorStop(1, "rgba(103, 232, 249, 0.4)");
+    g.addColorStop(0, "rgba(34, 211, 238, 0.36)");
+    g.addColorStop(0.5, "rgba(34, 211, 238, 0.08)");
+    g.addColorStop(1, "rgba(167, 139, 250, 0.3)");
     ctx.strokeStyle = g;
     ctx.lineWidth = 2;
+    ctx.setLineDash([8, 8]);
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
     ctx.stroke();
-
-    const pts = [];
-    for (let i = 0; i <= 40; i++) {
-      const ang = (i / 40) * TAU;
-      const px = Math.cos(ang) * 2.7, pz = Math.sin(ang) * 2.7;
-      pts.push({ x: px, y: heightAt(px, pz) + 0.06, z: pz });
-    }
-    ctx.beginPath();
-    polyline(pts, true);
-    ctx.strokeStyle = "rgba(103, 232, 249, 0.18)";
-    ctx.setLineDash([3, 6]);
-    ctx.stroke();
     ctx.setLineDash([]);
+
+    for (const post of [MAIN_POS, BKUP_POS]) {
+      const pts = [];
+      for (let i = 0; i <= 40; i++) {
+        const ang = (i / 40) * TAU;
+        const px = post.x + Math.cos(ang) * 2.7 * WORLD.scale;
+        const pz = post.z + Math.sin(ang) * 2.7 * WORLD.scale;
+        pts.push({ x: px, y: heightAt(px, pz) + 0.06, z: pz });
+      }
+      ctx.beginPath();
+      polyline(pts, true);
+      ctx.strokeStyle = "rgba(103, 232, 249, 0.18)";
+      ctx.setLineDash([3, 6]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
   }
 
   function drawCoverage() {
@@ -6913,7 +7458,7 @@
       if (pointers.size >= 2 && state.pinch) {
         const arr = Array.from(pointers.values());
         const d = Math.max(1, Math.hypot(arr[0].x - arr[1].x, arr[0].y - arr[1].y));
-        state.camGoal.dist = clamp((state.pinch.start * state.pinch.dist) / d, 16, 74);
+        state.camGoal.dist = clamp((state.pinch.start * state.pinch.dist) / d, WORLD.minCameraDist, WORLD.maxCameraDist);
         state.dragMoved += Math.abs(dx) + Math.abs(dy);
         return;
       }
@@ -6954,7 +7499,7 @@
       hideCanvasHint();
       cancelAuto();
       const factor = Math.exp(e.deltaY * 0.0011);
-      state.camGoal.dist = clamp(state.camGoal.dist * factor, 16, 74);
+      state.camGoal.dist = clamp(state.camGoal.dist * factor, WORLD.minCameraDist, WORLD.maxCameraDist);
     }, { passive: false });
     canvas.addEventListener("dblclick", () => setCamera("overview"));
   }
@@ -7210,8 +7755,8 @@
         else if (e.key === "ArrowRight") orbitCamera(14, 0);
         else if (e.key === "ArrowUp") orbitCamera(0, -30);
         else if (e.key === "ArrowDown") orbitCamera(0, 30);
-        else if (e.key === "+" || e.key === "=") state.camGoal.dist = clamp(state.camGoal.dist * 0.85, 16, 74);
-        else if (e.key === "-" || e.key === "_") state.camGoal.dist = clamp(state.camGoal.dist * 1.18, 16, 74);
+        else if (e.key === "+" || e.key === "=") state.camGoal.dist = clamp(state.camGoal.dist * 0.85, WORLD.minCameraDist, WORLD.maxCameraDist);
+        else if (e.key === "-" || e.key === "_") state.camGoal.dist = clamp(state.camGoal.dist * 1.18, WORLD.minCameraDist, WORLD.maxCameraDist);
         else if (e.key === "0") setCamera("overview");
       } else if (e.key === "Escape") {
         if (state.selected) {

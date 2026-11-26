@@ -148,6 +148,29 @@ test("v4 distributed architecture hooks are present", () => {
   }
 });
 
+test("v5 physical world and mission hooks are present", () => {
+  for (const token of [
+    "const WORLD =", "AUTONOMY_MODES", "missionPlanFor", "assignMissions",
+    "updateAutonomy", "lineOfSightBlocked", "radioLineBlocked", "queueObservation", "pendingObservations",
+    "obstacleState", "sensorFov", "cruiseSpeed", "windDrift"
+  ]) {
+    assert.ok(js.includes(token), `app.js missing v5 token ${token}`);
+  }
+  for (const phrase of [
+    "1a. Physical world and mission execution",
+    "store-and-forward",
+    "return-to-nearest-post",
+    "78×78"
+  ]) {
+    assert.ok(architecture.includes(phrase), `ARCHITECTURE.md missing: ${phrase}`);
+  }
+  const upgrades = read("docs/UPGRADES.md");
+  for (const phrase of ["v5 — doubled world", "One world descriptor", "Mission routes instead of circles", "5.0.0"]) {
+    assert.ok(upgrades.includes(phrase), `UPGRADES.md missing: ${phrase}`);
+  }
+  assert.ok(readme.includes("Mission-driven fleet"), "README is missing mission fleet summary");
+});
+
 test("docs and CI describe the v2 workflow", () => {
   for (const phrase of ["Focus mode", "Telemetry history", "PNG", "Comms blackout", "npm test"]) {
     assert.ok(readme.includes(phrase), `README is missing: ${phrase}`);

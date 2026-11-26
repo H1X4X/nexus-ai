@@ -14,7 +14,7 @@ This document defines the stronger engineering interpretation of NEXUS AI. The l
 
 ## 1. AI responsibility levels
 
-The Main AI does not control every detail of every drone. It provides high-level coordination while individual drones make their own local decisions.
+The Main and Backup posts are fixed ground stations at opposite ends of the monitored area; they are places an operator can stand, not airborne command drones. The coordinating service does not control every detail of every drone. It provides high-level mission intent while individual drones make their own local decisions.
 
 | Level | Responsibility | Failure behavior |
 | --- | --- | --- |
@@ -22,6 +22,21 @@ The Main AI does not control every detail of every drone. It provides high-level
 | **Group AI** | Coordinates a small group, relays local observations, elects a temporary local coordinator | Group can reform without the network coordinator |
 | **Network AI** | Maintains the overall environmental picture and distributes mission intent | Backup can assume coordination only through a valid leadership transition |
 | **Human administrator** | Approves missions, supervises alerts, authorizes sensitive actions | Can override autonomy and isolate unhealthy or untrusted nodes |
+
+## 1a. Physical world and mission execution
+
+The live simulator models a 78×78-unit area, twice the earlier arena, while keeping the same twelve aircraft. Terrain, roads, buildings, vegetation, feature positions and the two operator posts all derive from one world descriptor, so the 2D view, 3D view, radio ranges and mission routes agree.
+
+Drones are no longer placed on circular orbits. Each receives a deterministic mission:
+
+- **Relay corridor** — a staggered, back-and-forth patrol along the line between the Main and Backup posts. Waypoints near each post include a short station-keeping interval so the ground stations always have an airborne relay.
+- **Feature survey** — staged waypoints from the corridor to real monitored features, an on-site sensor sweep, then a return to the corridor before the next target. Staging keeps each branch within radio range and prevents instant long-haul observations.
+
+Flight modes are `takeoff`, `route`, `survey`, `rtl`, `landing`, `hold` and `failed`. Navigation follows waypoints with a reported heading, a forward sensor field of view, terrain clearance, building avoidance and wind drift correction. Battery reserve, manual recall and lost-link states override mission progress and trigger return-to-nearest-post. Failed drones perform an emergency descent; untrusted drones hold locally.
+
+Radio links use elevated post antennas and airborne relay altitudes; the mesh checks terrain and building obstruction instead of treating every node within nominal range as connected. Launch and landing fall back to the short-range control link. Interference, storms and manually severed links remain separate failure modes.
+
+This is a physical simulation, not a flight controller: speeds, climb rates, sensor geometry and endurance are simplified but consistent across the map.
 
 ## 2. Coordinator failover without split-brain
 
@@ -48,7 +63,7 @@ Communication is logically separated so bulk data cannot delay safety traffic.
 | **Telemetry / coordination** | Position, battery, health, connectivity, observations, heartbeats | Medium |
 | **Bulk data** | Images, video, maps, historical sensor recordings | Lowest |
 
-A **store-and-forward** mechanism lets a disconnected drone buffer observations locally and forward them after reconnection.
+A **store-and-forward** mechanism lets a disconnected drone buffer observations locally and forward them after reconnection. Delivery is not instantaneous: every record waits for a map-sync tick and pays a delay derived from channel latency and route hops, so the shared map visibly ages. Records from a superseded coordinator epoch are rejected at the receiver.
 
 ## 4. Shared environmental map and sensor fusion
 
@@ -63,8 +78,10 @@ Every observation is a structured record rather than a bare map marker.
 | Confidence | How reliable the observation is |
 | Data type | Image, temperature, terrain, sound, etc. |
 | Expiration | When the information becomes stale |
+| Channel | Which communication lane carried the record |
+| Coordinator epoch | Whether the record belongs to the current leadership term |
 
-The map distinguishes **confirmed**, **estimated**, **historical**, **conflicting** and **unobserved** areas.
+A drone only creates a record when the feature is inside sensor range, inside the aircraft's forward field of view and not blocked by terrain or a building. The map distinguishes **provisional**, **confirmed**, **historical** and **unobserved** areas.
 
 If Drone 4 detects smoke and Drone 2 independently reports the same area, NEXUS AI fuses the observations and raises confidence. Conflicting reports reduce confidence and are preserved for human review. Drones are not forced to use the same model: nodes with more processing power or battery may contribute richer observations.
 
@@ -77,7 +94,8 @@ Each drone has:
 - Geofencing and authorized operating boundaries.
 - Battery reserve requirements.
 - Emergency landing procedures.
-- Return-to-home or another approved recovery behavior.
+- Takeoff, cruise, survey, return-to-nearest-post and landing states.
+- Terrain clearance and building avoidance during navigation.
 - Collision avoidance and separation safeguards.
 - A defined response to lost communication.
 - A manual override mechanism.
@@ -161,4 +179,4 @@ flight safety does not depend on the Main AI.
 
 The difficult parts are not simply connecting AI models to drones. They are reliable distributed coordination, communication under unreliable conditions, accurate shared mapping, safe operation when autonomy or communication fails, and testing at increasing scale.
 
-The first strong prototype demonstrates **five simulated drones, a shared map, distributed communication and backup coordination** working together. The live NEXUS AI command center extends that foundation to twelve drone nodes, eight environmental maps, six situations and scripted failure scenarios.
+The first strong prototype demonstrates **five simulated drones, a shared map, distributed communication and backup coordination** working together. The live NEXUS AI command center extends that foundation to twelve mission-driven drone nodes in a doubled physical arena, eight environmental maps, six situations and scripted failure scenarios.

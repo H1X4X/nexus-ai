@@ -1,8 +1,20 @@
 # NEXUS AI upgrade notes
 
-This document records the v2 upgrade applied to the original single-page prototype, the v3 3D-map visual overhaul, and the v4 distributed-architecture upgrade. The app remains dependency-free at runtime: plain JavaScript, local fonts and a locally vendored Three.js r128.
+This document records the v2 upgrade applied to the original single-page prototype, the v3 3D-map visual overhaul, the v4 distributed-architecture upgrade and the v5 physical-world/mission-AI upgrade. The app remains dependency-free at runtime: plain JavaScript, local fonts and a locally vendored Three.js r128.
 
-The full engineering interpretation of the v4 work is in [`ARCHITECTURE.md`](ARCHITECTURE.md). The live simulator exposes its core state in the **Distributed architecture** strip below the metrics.
+The full engineering interpretation of the distributed work is in [`ARCHITECTURE.md`](ARCHITECTURE.md). The live simulator exposes its core state in the **Distributed architecture** strip below the metrics.
+
+## v5 — doubled world and mission-driven autonomy
+
+The v5 upgrade makes the simulated world and the drones behave like a physical system rather than a moving diagram. Seeds, the eight maps, six situations, four scenarios and the twelve-aircraft fleet are unchanged.
+
+- **One world descriptor** — `WORLD` defines the 2× scale, 78×78 extent, grid resolution, terrain segments, scatter density, camera distances/zoom clamps, fog, shadows, sky and rain coverage. Map feature tables stay authored in sector coordinates and are scaled once at load, preserving deterministic layouts.
+- **Ground posts at the ends** — MAIN moves to `(-30, 30)` and BACKUP to `(30, -30)`. Terrain flattening, 2D pads, the 3D outpost installations, the corridor beam and radio ranges all use those same fixed positions. Post-to-drone links remain a distinct dashed connection type.
+- **Consistent terrain and visuals** — 3D terrain is now 160×160 segments with tiled detail/normal maps; grid, rings, water, skirt, storm volume and 2D projection follow the shared extent. Buildings keep their authored footprints but gain scale-aware placement; vegetation density rises to fill the larger arena. Lighting uses a warmer key light, cooler bounce, wider shadow frustum, adjusted fog and denser rain.
+- **Mission routes instead of circles** — drones receive deterministic relay-corridor or feature-survey waypoint routes. They fly with a reported heading, cruise/climb/descent rates, wind drift correction, terrain clearance and building avoidance. Modes are takeoff, route, survey, rtl, landing, hold and failed.
+- **Physical sensing** — feature detection now requires range, forward field of view and line of sight. Observations are buffered onboard when the route is down, then delivered after a sync tick plus latency/hop delay. Epoch-mismatched records are rejected; confidence and freshness come from the delivered record.
+- **Safety precedence** — emergency landing, isolated hold, battery/lost-link/manual RTL always override mission progress. Reset, fault clearing and restore rebuild mission state and pending queues together.
+- **Inspector, exports and tests** — the inspector shows mission, flight mode, waypoint, heading/FOV, obstacle state, delivery delay and onboard buffer. JSON/CSV exports include world geometry, per-drone flight data, observation counters and channel/epoch fields. Wiring and simulation tests cover the new tokens and behaviour; export version is now `5.0.0`.
 
 ## v4 — distributed architecture made explicit
 
@@ -18,7 +30,7 @@ The v4 upgrade turns the proposal into a set of visible, testable simulation rul
 - **Measured targets and roadmap** — proposed prototype targets (5 initial drones, 1–2 s status, sub-5 s failover, reconnection sync) are defined in code and documentation. The architecture roadmap is staged from simulation to a controlled hardware prototype.
 - **Documentation** — the static architecture tabs now describe leases, epochs, sensor fusion, three channels, independent safety, zero trust and privacy. The run notes explain epoch-guarded failover.
 
-The export version remains `2.0.0` so existing run tooling keeps working; new data is additive under `architecture`, `map.observations` and `audit`.
+At the time of v4, the export version remained `2.0.0`; new data was additive under `architecture`, `map.observations` and `audit`. v5 advances the version to `5.0.0` while keeping those fields and adding `world` and `fleet`.
 
 ## v3 — full 3D map overhaul
 
@@ -32,9 +44,9 @@ The WebGL scene was rebuilt for believable materials, depth and situation-driven
 - **Buildings** — distinct silhouettes per type with textured surfaces and real architectural detail: gabled houses/cabins with framed glass windows, doors and chimneys; towers with observation decks and antennas; tanks with domes, bands and ladders; bridges with asphalt decks and rails; plants with roof vents and pipework.
 - **Drones** — each drone is now a quadcopter: flattened fuselage with glossy canopy, carbon spars, four motors, spinning props with soft rotor discs, landing skids, gimballed camera, antenna and status LEDs. Airframes bank into movement, props stop when a drone fails, and colours reflect connected/leader/unrouted/lost state. Every small drone also projects a rotating sensor cone and ground footprint so its scanned area is visible.
 - **Roads** — UV-mapped asphalt ribbons with worn centre lines and soft shoulders follow the terrain instead of thin floating lines.
-- **Coordinators** — MAIN and BKUP are fixed operator outposts at opposite ends of the map: a concrete pad, console, operator figure, sweeping comms dish and status beacon. MAIN sits at the map start (`-15, 15`), BACKUP at the far end (`15, -15`), and their heights follow the terrain. The simulation still uses the same deterministic endpoints and link ranges.
+- **Coordinators** — MAIN and BKUP are fixed operator outposts at opposite ends of the map: a concrete pad, console, operator figure, sweeping comms dish and status beacon. MAIN sits at the map start and BACKUP at the far end; their coordinates were scaled in v5 to `(-30, 30)` and `(30, -30)`, and their heights follow the terrain. The simulation still uses the same deterministic endpoints and link ranges.
 - **Command links** — post-to-drone traffic now uses its own animated dashed amber 3D channel instead of sharing the solid mesh-link line. The topology and 2D views use the same dashed style, so commands read as a separate connection type at a glance.
-- **Rain scenario** — 700 animated streaks drift across the scene, fog closes in, and lighting flattens.
+- **Rain scenario** — animated streaks drift across the scene, fog closes in, and lighting flattens; v5 expands coverage to 1,100 streaks across the larger arena.
 - All new materials and geometries are disposed on map change; the shared texture atlas (glow, sky and procedural maps) is deliberately preserved.
 
 ## New simulator features
