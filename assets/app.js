@@ -4145,8 +4145,9 @@
     const ground = corners.map(([ox, oz]) => projectPoint({ x: b.x + ox, y: heightAt(b.x + ox, b.z + oz) + 0.05, z: b.z + oz }));
     const top = corners.map(([ox, oz]) => projectPoint({ x: b.x + ox, y: heightAt(b.x + ox, b.z + oz) + b.h, z: b.z + oz }));
     if (ground.some((p) => !p) || top.some((p) => !p)) return;
-    const sideCol = b.type === "tower" ? "rgba(103,232,249,0.35)" : "rgba(120,150,175,0.55)";
-    const topCol = b.type === "tower" ? "rgba(103,232,249,0.22)" : "rgba(180,205,225,0.5)";
+    const style = styleFor(b.type);
+    const sideCol = b.type === "tower" ? "rgba(103,232,249,0.35)" : style.wall2;
+    const topCol = b.type === "tower" ? "rgba(103,232,249,0.22)" : style.roof2;
     // sides 0-1 (back), 1-2 (right), 2-3 (front), 3-0 (left) sorted far-first by depth
     const sides = [
       [ground[0], ground[1], top[1], top[0]],
