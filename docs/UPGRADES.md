@@ -1,8 +1,28 @@
 # NEXUS AI upgrade notes
 
-This document records the v2 upgrade applied to the original single-page prototype, the v3 3D-map visual overhaul, the v4 distributed-architecture upgrade, the v5 physical-world/mission-AI upgrade and the v6 reusable drone-system extraction. The app remains dependency-free at runtime: plain JavaScript, local fonts and a locally vendored Three.js r128.
+This document records the v2 upgrade applied to the original single-page prototype, the v3 3D-map visual overhaul, the v4 distributed-architecture upgrade, the v5 physical-world/mission-AI upgrade, the v6 reusable drone-system extraction, the v6.1 performance/accessibility pass and the v6.2 scene-realism pass. The app remains dependency-free at runtime: plain JavaScript, local fonts and a locally vendored Three.js r128.
 
 The full engineering interpretation of the distributed work is in [`ARCHITECTURE.md`](ARCHITECTURE.md). The live simulator exposes its core state in the **Distributed architecture** strip below the metrics.
+
+## v6.2 — scene realism pass
+
+A modelling pass on the 3D battlefield: seeds, maps, scenarios and simulation rules are unchanged, and the extra detail is batched into instanced meshes so the frame cost stays close to v6.1.
+
+- **Trees are real geometry** — crossed alpha cards are replaced by merged, flat-shaded 3D models: four overlapping cone tiers on a tapered trunk for conifers, a clustered faceted crown for broadleaf trees. Each tree is one instance with baked vertex shading and per-instance hue, plus instanced understory scrub. A dense forest is two or three draw calls instead of hundreds of billboard planes.
+- **Buildings read as structures** — wall boxes rescale their box UVs so brick, siding, stucco and concrete keep a constant real-world size on every footprint. Windows now wrap all four facades and are collected into three instanced batches (dark frame, reflective glass, lit pane), so glazing is cheaper than the old single-face boxes. Apartments gain parapets, balconies with railings, rooftop HVAC and entrance canopies; warehouses gain roller doors with ribs, hazard trim, dock bumpers, wall-pack lights and roof vents; cabins and houses gain gutters, downspouts and porch canopies; towers gain a guard-railed observation deck, a dish and a base lamp; tanks gain a catwalk and riser; bridges gain guard rails and lamps. Every building also gets a soft contact-shadow decal.
+- **Drones gained airframe detail** — a moulded hull seam, canopy, gimballed camera with bezel and side IR sensor, GPS puck, underslung battery tray with heatsink fins, arm fairings, motor bells, propeller guard rings, red/green navigation lights and a white tail strobe that blinks in flight and dims when the link is lost. Static detail is merged into one mesh per material and only the structural parts cast shadows, so the extra modelling costs fewer draw calls than the old airframe. The invisible pick sphere is now parented to the airframe, so 3D selection follows the drone instead of sitting at the world origin. On the industrial map at 900×700 the average animation-frame callback is **10.3 ms**, down from **14.0 ms** before the pass.
+- **Tests** — `tests/wiring.test.mjs` fails if the instanced geometry, facade window pass or strobe wiring is removed.
+
+## v6.1 — performance and accessibility pass
+
+A pass on the command center itself; seeds, maps, scenarios, simulation rules and the drone-system API are unchanged.
+
+- **Off-screen rendering gate** — an `IntersectionObserver` on the canvas stage switches camera updates and drawing off while the simulator is scrolled out of view, then catches the view up on return. The simulation keeps running, so the clock and telemetry stay continuous. Measured in Chromium, the average animation-frame callback while reading the proposal fell from **8.8 ms to 0.26 ms**; the simulator view itself is unchanged at roughly 10 ms per frame.
+- **Reduced motion** — the **Orbit** camera preset no longer auto-rotates when the system asks for reduced motion. The preset still frames the orbit view, and its toast explains why it stays still.
+- **Keyboard navigation** — a **Skip to the proposal** link is the first tab stop and only appears on focus.
+- **Screen-reader labelling** — the 2D fallback/topology canvas is announced as a network map instead of a 3D view.
+- **Link previews** — Open Graph image width, height and alt text plus a Twitter summary card, so shared links unfurl correctly.
+- **Tests** — `tests/wiring.test.mjs` now fails if the render gate, the reduced-motion guard or the skip link is removed.
 
 ## v6 — complete reusable drone system
 

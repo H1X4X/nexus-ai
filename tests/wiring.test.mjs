@@ -188,6 +188,32 @@ test("reusable drone system is loaded and drives the simulator", () => {
   }
 });
 
+test("render loop idles off screen and respects reduced motion", () => {
+  assert.ok(js.includes("function setupStageVisibility"), "missing off-screen render gate");
+  assert.ok(js.includes("stageOnScreen"), "missing stage visibility state");
+  assert.ok(
+    /if \(state\.stageOnScreen\) \{\r?\n\s+updateCamera\(dt\);\r?\n\s+render\(/.test(js),
+    "frame() does not gate camera and rendering on stage visibility"
+  );
+  assert.ok(
+    /const auto = !!preset\.auto && !reducedMotion/.test(js),
+    "auto-orbit ignores the reduced-motion preference"
+  );
+  assert.ok(html.includes('class="skip-link"'), "missing keyboard skip link");
+  assert.ok(css.includes(".skip-link"), "missing skip-link styles");
+});
+
+test("scene models are instanced 3D geometry, not flat cards", () => {
+  for (const token of [
+    "makeConiferGeometry", "makeBroadleafGeometry", "mergeGeometryParts",
+    "shadowBlob: makeAOTexture()", "collectWindows", "strobeMat"
+  ]) {
+    assert.ok(js.includes(token), `app.js missing scene detail: ${token}`);
+  }
+  assert.ok(js.includes("new THREE.InstancedMesh(unitBox"), "building windows are not instanced");
+  assert.ok(js.includes("flatShading: true"), "foliage is not flat-shaded 3D geometry");
+});
+
 test("docs and CI describe the v2 workflow", () => {
   for (const phrase of ["Focus mode", "Telemetry history", "PNG", "Comms blackout", "npm test"]) {
     assert.ok(readme.includes(phrase), `README is missing: ${phrase}`);
