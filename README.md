@@ -78,7 +78,7 @@ The full API is documented in [`docs/DRONE_SYSTEM.md`](docs/DRONE_SYSTEM.md). Te
 - **Arrow keys** — orbit (←→ yaw, ↑ top-down / ↓ horizon), **+ / −** zoom, **0** back to Overview (active while the simulator is on screen)
 - **Esc** — clear the current selection
 - Speed presets: **0.5× / 1× / 2× / 4×** in the ops top bar
-- **Drag up** — lift the camera to top-down; drag sideways for a full **360° orbit** at a stable height, scroll to zoom, right-drag (or Shift-drag) to pan. The camera never drops to the flat horizon where the terrain vanishes. Camera preset buttons stay visible on small screens, so **Top-down** is one tap and **Orbit** (`4`) auto-rotates a full turn in about 14 seconds (grab the canvas to take over). A compass HUD (top-left) shows live heading, pitch and distance.
+- **Left-drag** — moves the map with the cursor: drag right and the terrain slides right, drag down and it slides down, with no axis ever swapping. Scroll to zoom, right-drag (or Shift-drag) for a full **360° orbit** at a stable height. The camera never drops to the flat horizon where the terrain vanishes. Camera preset buttons stay visible on small screens, so **Top-down** is one tap and **Orbit** (`4`) auto-rotates a full turn in about 14 seconds (grab the canvas to take over). A compass HUD (top-left) shows live heading, pitch and distance.
 
 Use the fault buttons to sever links, create interference or a storm partition, fail a drone, or take down the Main or Backup AI. Use **Restore everything** to watch the mesh and buffered records reconcile.
 

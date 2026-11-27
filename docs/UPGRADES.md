@@ -4,6 +4,14 @@ This document records the v2 upgrade applied to the original single-page prototy
 
 The full engineering interpretation of the distributed work is in [`ARCHITECTURE.md`](ARCHITECTURE.md). The live simulator exposes its core state in the **Distributed architecture** strip below the metrics.
 
+## v6.5 – left-drag moves the map
+
+One interaction fix on top of v6.4. Seeds, maps, scenarios, situations, drone behaviour and the drone-system API are unchanged.
+
+- **Left-drag pans instead of orbiting** – a left-drag on the battlefield used to orbit the camera around its target. Orbiting keeps the target fixed, so the terrain swings in an arc under the cursor; near top-down the swing is almost entirely sideways, which reads as the up/down axis controlling left/right. A left-drag now pans: the map follows the cursor one-to-one on both axes (drag right → terrain right, drag down → terrain down).
+- **Orbit is the deliberate gesture** – right-drag or Shift-drag still orbits, wheel still zooms, the arrow keys and the `1`–`4` presets are unchanged, and click-to-inspect still works because a drag is only a drag once it has moved more than six pixels.
+- **Copy and aria labels** – the canvas hint, its toast, the 3D canvas `aria-label` and the README interaction list now describe drag-to-move, right-drag/Shift-drag to orbit.
+
 ## v6.4 – full-map scan lanes and camera drag
 
 Two behaviour fixes on top of v6.3. Seeds, maps, scenarios, situations and the drone-system API are unchanged.

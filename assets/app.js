@@ -3140,14 +3140,14 @@
       el.canvasHint.textContent =
         state.view === "topology"
           ? "Click a node to inspect it · drag the map to pan"
-          : "Drag up for top-down · drag to orbit · scroll to zoom · right-drag to pan";
+          : "Drag to move the map · right-drag or Shift-drag to orbit · scroll to zoom";
       el.canvasHint.classList.remove("is-hidden");
     }
     if (!silent) {
       toast(
         state.view === "topology"
           ? "Network topology — rings show distance in hops from the active coordinator."
-          : "Command center — drag to orbit, scroll to zoom, click a node.",
+          : "Command center — drag to move the map, right-drag to orbit, scroll to zoom, click a node.",
         ""
       );
     }
@@ -7820,9 +7820,13 @@
 
       if (!state.dragging) return;
       state.dragMoved += Math.abs(dx) + Math.abs(dy);
-      const pan = dragButton === 2 || e.shiftKey;
-      if (pan) panCamera(dx, dy);
-      else orbitCamera(dx, dy);
+      // Left drag moves the map with the cursor: drag right → map right,
+      // drag down → map down. Orbiting is the deliberate gesture
+      // (right-drag or Shift-drag) because a left-drag orbit reads as the
+      // map spinning under the cursor instead of following it.
+      const orbit = dragButton === 2 || e.shiftKey;
+      if (orbit) orbitCamera(dx, dy);
+      else panCamera(dx, dy);
     });
 
     const endPointer = (e) => {

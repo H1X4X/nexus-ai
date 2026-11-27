@@ -1,6 +1,6 @@
 {
   "name": "nexus-ai",
-  "version": "6.4.0",
+  "version": "6.5.0",
   "private": true,
   "description": "Interactive engineering proposal and live 3D command center for a self-healing distributed drone network.",
   "type": "module",
