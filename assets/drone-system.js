@@ -206,8 +206,9 @@
       if (i % 2 === 0) {
         const stops = Array.from({ length: relayCount + 1 }, (_, k) => k / relayCount);
         const sequence = stops.concat(stops.slice(1, -1).reverse());
+        const spread = ((i / 2) - 2.5) * 1.7;
         const waypoints = sequence.map((t, k) => Object.assign(
-          corridor.point(t, this.relayLane(k)),
+          corridor.point(t, this.relayLane(k) + spread),
           { type: "relay", hold: k === 0 || k === relayCount ? 4.5 : 0 }
         ));
         return {

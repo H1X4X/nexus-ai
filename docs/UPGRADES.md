@@ -12,6 +12,7 @@ A focused pass on the two hand-built environments. Seeds, maps, situations, scen
 - **Apartments are city blocks** – rooftop water tanks, antenna masts and stair bulkheads, plus a sidewalk with kerbs and paving joints, a street light, a bus shelter, planters, a hydrant and parked cars. Overlapping aprons use a tiny deterministic height offset so neighbouring slabs cannot z-fight.
 - **Placement respects the map** – sampled clearance tests keep yards, parking bays, street furniture and parked vehicles off the asphalt ribbons and out of neighbouring footprints. A deterministic per-map generator makes the prop mix repeatable for the same seed.
 - **Detail stays cheap** – every box and cylinder prop is accumulated into material-keyed instanced batches and flushed once after the building pass. A fully dressed street costs a handful of draw calls instead of hundreds of individual meshes.
+- **Staggered relays** – each relay now flies its own offset track off the straight backbone, so the corridor formation spreads into a staggered patrol instead of a single line.
 - **Verification** – `tests/wiring.test.mjs` fails if the yard/frontage helpers or their instanced batches are removed. The eight-map browser sweep still reports zero console errors or warnings.
 
 ## v6.2 — scene realism pass

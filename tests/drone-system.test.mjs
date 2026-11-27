@@ -66,6 +66,10 @@ test("mission planner produces waypoint routes and matching task queues", () => 
     assert.ok(Number.isFinite(d.heading));
     assert.equal(d.autonomyMode, "takeoff");
   }
+  const relays = drones.filter((d) => d.mission === "relay corridor");
+  assert.ok(relays.length > 1, "mission planner must split relays across the corridor");
+  const starts = relays.map((d) => ({ x: d.waypoints[0].x, z: d.waypoints[0].z }));
+  assert.notDeepEqual(starts[0], starts[1], "relays must not share one corridor line");
   assert.ok(drones.some((d) => d.mission === "relay corridor"));
   assert.ok(drones.some((d) => d.mission === "feature survey"));
 });
