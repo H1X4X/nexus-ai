@@ -1,8 +1,18 @@
 # NEXUS AI upgrade notes
 
-This document records the v2 upgrade applied to the original single-page prototype, the v3 3D-map visual overhaul, the v4 distributed-architecture upgrade, the v5 physical-world/mission-AI upgrade, the v6 reusable drone-system extraction, the v6.1 performance/accessibility pass and the v6.2 scene-realism pass. The app remains dependency-free at runtime: plain JavaScript, local fonts and a locally vendored Three.js r128.
+This document records the v2 upgrade applied to the original single-page prototype, the v3 3D-map visual overhaul, the v4 distributed-architecture upgrade, the v5 physical-world/mission-AI upgrade, the v6 reusable drone-system extraction, the v6.1 performance/accessibility pass, the v6.2 scene-realism pass and the v6.3 street-and-block pass. The app remains dependency-free at runtime: plain JavaScript, local fonts and a locally vendored Three.js r128.
 
 The full engineering interpretation of the distributed work is in [`ARCHITECTURE.md`](ARCHITECTURE.md). The live simulator exposes its core state in the **Distributed architecture** strip below the metrics.
+
+## v6.3 – street and block detail pass
+
+A focused pass on the two hand-built environments. Seeds, maps, situations, scenarios, fleet behaviour and the drone-system API are unchanged; only the 3D dressing of industrial warehouses and urban apartment blocks changes.
+
+- **Warehouses are worksites** – a muted masonry plinth, a canopied loading dock with support posts, a yard-side personnel door, skylights, an HVAC plant and roof vents. Each site gets a compatible service apron, stackable containers, pallets, drums, a fence, a street light, a small parking bay and an occasional delivery truck.
+- **Apartments are city blocks** – rooftop water tanks, antenna masts and stair bulkheads, plus a sidewalk with kerbs and paving joints, a street light, a bus shelter, planters, a hydrant and parked cars. Overlapping aprons use a tiny deterministic height offset so neighbouring slabs cannot z-fight.
+- **Placement respects the map** – sampled clearance tests keep yards, parking bays, street furniture and parked vehicles off the asphalt ribbons and out of neighbouring footprints. A deterministic per-map generator makes the prop mix repeatable for the same seed.
+- **Detail stays cheap** – every box and cylinder prop is accumulated into material-keyed instanced batches and flushed once after the building pass. A fully dressed street costs a handful of draw calls instead of hundreds of individual meshes.
+- **Verification** – `tests/wiring.test.mjs` fails if the yard/frontage helpers or their instanced batches are removed. The eight-map browser sweep still reports zero console errors or warnings.
 
 ## v6.2 — scene realism pass
 

@@ -4928,8 +4928,28 @@
     const brickMat = std({ map: T.tex.brick, color: 0xb9a49c, roughness: 0.9 });
     const concreteMat = std({ map: T.tex.concrete, color: 0x4a565e, roughness: 0.92 });
     const darkMat = std({ map: T.tex.concrete, color: 0x333e46, roughness: 0.9 });
-    const warehouseMat = std({ map: T.tex.brick, color: 0xb9a49c, roughness: 0.9 });
+    const warehouseMat = std({ map: T.tex.concrete, color: 0xb8b0a6, roughness: 0.92 });
+    const warehouseBaseMat = std({ map: T.tex.brick, color: 0x7c7069, roughness: 0.94 });
     const apartmentMat = std({ map: T.tex.stucco, color: 0xd8dee2, roughness: 0.9 });
+    const sidewalkMat = std({ map: T.tex.concrete, color: 0x9aa2a6, roughness: 0.97 });
+    const curbMat = std({ map: T.tex.concrete, color: 0x6f777c, roughness: 0.96 });
+    const lotMat = std({ map: T.tex.asphalt, color: 0x555d62, roughness: 0.98 });
+    const parkingLineMat = std({ color: 0xd8d2b4, roughness: 0.9 });
+    const fenceMat = std({ map: T.tex.metal, color: 0x66767e, roughness: 0.58, metalness: 0.42 });
+    const rustMat = std({ map: T.tex.metal, color: 0x9d6244, roughness: 0.78, metalness: 0.24 });
+    const containerMats = [
+      std({ map: T.tex.metal, color: 0x2f6f86, roughness: 0.68, metalness: 0.3 }),
+      std({ map: T.tex.metal, color: 0x8a4d37, roughness: 0.74, metalness: 0.24 }),
+      std({ map: T.tex.metal, color: 0x4d6b4f, roughness: 0.7, metalness: 0.28 }),
+      std({ map: T.tex.metal, color: 0x9a8b55, roughness: 0.72, metalness: 0.26 })
+    ];
+    const carMats = [
+      std({ color: 0x3c4b57, roughness: 0.42, metalness: 0.35 }),
+      std({ color: 0x8e3f3a, roughness: 0.46, metalness: 0.3 }),
+      std({ color: 0xc8c3b8, roughness: 0.5, metalness: 0.22 }),
+      std({ color: 0x335f73, roughness: 0.44, metalness: 0.34 })
+    ];
+    const foliageMat = std({ color: 0x3f5f3a, roughness: 0.98 });
     const glassMat = new THREE.MeshPhongMaterial({
       color: 0x8fc6dc, specular: 0xffffff, shininess: 140,
       envMap: T.envCube, reflectivity: 0.7,
@@ -5014,12 +5034,290 @@
       }
     };
 
-    for (const b of cache.buildings) {
+    // Street furniture, yards and rooftop clutter are gathered into instanced
+    // batches keyed by material. A fully dressed industrial block therefore
+    // costs a handful of draw calls instead of several hundred small meshes.
+    const propBoxBatches = new Map();
+    const propCylBatches = new Map();
+    const propBatch = (map, mat, spec) => {
+      let list = map.get(mat);
+      if (!list) map.set(mat, (list = []));
+      list.push(spec);
+    };
+    const addBox = (parent, mat, x, y, z, sx, sy, sz, ry = 0) => {
+      propBatch(propBoxBatches, mat, {
+        x: parent.position.x + x, y: parent.position.y + y, z: parent.position.z + z,
+        sx, sy, sz, ry
+      });
+    };
+
+    const addCyl = (parent, mat, rTop, rBottom, h, x, y, z) => {
+      propBatch(propCylBatches, mat, {
+        x: parent.position.x + x, y: parent.position.y + y, z: parent.position.z + z,
+        r: (rTop + rBottom) / 2, h
+      });
+    };
+
+    const addLamp = (parent, x, y, z) => addBox(parent, glowFor(0xffd9a0), x, y, z, 0.12, 0.035, 0.08);
+
+    const addStreetLight = (parent, x, z, ry = 0) => {
+      addBox(parent, concreteMat, x, 0.12, z, 0.2, 0.24, 0.2);
+      addCyl(parent, metalMat, 0.035, 0.05, 1.55, x, 0.92, z, 6);
+      addBox(parent, metalMat, x + Math.cos(ry) * 0.18, 1.68, z + Math.sin(ry) * 0.18,
+        0.36, 0.035, 0.035, ry);
+      addLamp(parent, x + Math.cos(ry) * 0.34, 1.65, z + Math.sin(ry) * 0.34);
+    };
+
+    const addCar = (parent, x, z, ry, mat) => {
+      const c = Math.cos(ry), s = Math.sin(ry);
+      addBox(parent, mat, x, 0.16, z, 0.32, 0.16, 0.62, ry);
+      addBox(parent, glassMat, x, 0.27, z - 0.02, 0.26, 0.11, 0.3, ry);
+      for (const [wx, wz] of [[-0.16, -0.2], [0.16, -0.2], [-0.16, 0.2], [0.16, 0.2]]) {
+        addBox(parent, darkMat, x + wx * c - wz * s, 0.07, z + wx * s + wz * c,
+          0.07, 0.08, 0.12, ry);
+      }
+      addLamp(parent, x + Math.sin(ry) * 0.31, 0.18, z + Math.cos(ry) * 0.31);
+    };
+
+    const addTruck = (parent, x, z, ry, mat) => {
+      const c = Math.cos(ry), s = Math.sin(ry);
+      addBox(parent, mat, x - c * 0.32, 0.28, z - s * 0.32, 0.55, 0.4, 0.5, ry);
+      addBox(parent, darkMat, x + c * 0.28, 0.34, z + s * 0.28, 1.05, 0.52, 0.72, ry);
+      addBox(parent, glassMat, x - c * 0.56, 0.38, z - s * 0.56, 0.04, 0.22, 0.38, ry);
+      for (const [wx, wz] of [[-0.42, -0.24], [0.42, -0.24], [-0.42, 0.24], [0.42, 0.24]]) {
+        addBox(parent, darkMat, x + wx * c - wz * s, 0.12, z + wx * s + wz * c,
+          0.12, 0.14, 0.16, ry);
+      }
+    };
+
+    const addContainer = (parent, x, z, ry, mat) => {
+      const len = 1.45, wid = 0.72, h = 0.52;
+      const c = Math.cos(ry), s = Math.sin(ry);
+      addBox(parent, mat, x, h / 2 + 0.06, z, wid, h, len, ry);
+      for (let i = -2; i <= 2; i++) {
+        addBox(parent, darkMat, x + c * (i * len / 6) + s * (wid / 2 + 0.01), h / 2 + 0.06,
+          z + s * (i * len / 6) - c * (wid / 2 + 0.01), 0.025, h * 0.82, 0.025, ry);
+      }
+      addBox(parent, darkMat, x + s * (len / 2 + 0.01), h / 2 + 0.06,
+        z + c * (len / 2 + 0.01), wid * 0.9, h * 0.8, 0.035, ry);
+    };
+
+    const addFence = (parent, x, z, length, ry) => {
+      const c = Math.cos(ry), s = Math.sin(ry);
+      const posts = Math.max(2, Math.round(length / 0.55));
+      for (let i = 0; i <= posts; i++) {
+        const t = -length / 2 + (i / posts) * length;
+        addBox(parent, fenceMat, x + c * t, 0.48, z + s * t, 0.035, 0.96, 0.035, ry);
+      }
+      for (const y of [0.32, 0.72]) {
+        addBox(parent, fenceMat, x, y, z, length, 0.025, 0.025, ry);
+      }
+    };
+
+    const addSidewalk = (parent, b, extra = 1.1, lift = 0) => {
+      const w = b.w + extra, d = b.d + extra;
+      addBox(parent, sidewalkMat, 0, 0.035 + lift, 0, w, 0.07, d);
+      addBox(parent, curbMat, 0, 0.09 + lift, d / 2, w, 0.12, 0.08);
+      addBox(parent, curbMat, 0, 0.09 + lift, -d / 2, w, 0.12, 0.08);
+      addBox(parent, curbMat, w / 2, 0.09 + lift, 0, 0.08, 0.12, d);
+      addBox(parent, curbMat, -w / 2, 0.09 + lift, 0, 0.08, 0.12, d);
+      for (let x = -w / 2 + 0.45; x < w / 2 - 0.2; x += 0.85) {
+        addBox(parent, curbMat, x, 0.073 + lift, 0, 0.014, 0.004, d - 0.1);
+      }
+      for (let z = -d / 2 + 0.45; z < d / 2 - 0.2; z += 0.85) {
+        addBox(parent, curbMat, 0, 0.073 + lift, z, w - 0.1, 0.004, 0.014);
+      }
+    };
+
+    // Clearance tests keep street furniture and parking off roads and out of
+    // neighbouring footprints. The map layouts are hand-placed, so a cheap
+    // sampled rectangle check is enough and stays deterministic.
+    const nearRoad = (x, z, pad = 0.55) => {
+      for (const road of cache.roads) {
+        for (let i = 0; i < road.length - 1; i++) {
+          const ax = road[i][0], az = road[i][1];
+          const bx = road[i + 1][0], bz = road[i + 1][1];
+          const vx = bx - ax, vz = bz - az;
+          const len2 = vx * vx + vz * vz || 1;
+          const t = clamp(((x - ax) * vx + (z - az) * vz) / len2, 0, 1);
+          if (Math.hypot(x - (ax + vx * t), z - (az + vz * t)) < pad) return true;
+        }
+      }
+      return false;
+    };
+    const nearBuilding = (self, x, z, pad = 0.3) => cache.buildings.some((o) => {
+      if (o === self) return false;
+      return Math.abs(x - o.x) < o.w / 2 + pad && Math.abs(z - o.z) < o.d / 2 + pad;
+    });
+    const areaClear = (self, cx, cz, hw, hd, padRoad = 0.55, padBld = 0.3) => {
+      for (let ix = -1; ix <= 1; ix++) {
+        for (let iz = -1; iz <= 1; iz++) {
+          const x = cx + ix * hw, z = cz + iz * hd;
+          if (nearRoad(x, z, padRoad) || nearBuilding(self, x, z, padBld)) return false;
+        }
+      }
+      for (let k = 1; k < 5; k++) {
+        const f = -1 + (k / 5) * 2;
+        if (nearRoad(cx + f * hw, cz, padRoad) || nearRoad(cx, cz + f * hd, padRoad)) return false;
+        if (nearBuilding(self, cx + f * hw, cz, padBld) || nearBuilding(self, cx, cz + f * hd, padBld)) return false;
+      }
+      return true;
+    };
+
+    const addParkingLot = (parent, b, rng, side = 1) => {
+      const pw = Math.min(3.0, b.w * 0.92);
+      const pd = 1.45;
+      const pz = side * (b.d / 2 + 0.92 + pd / 2);
+      if (!areaClear(b, b.x, b.z + pz, pw / 2, pd / 2)) return false;
+      addBox(parent, lotMat, 0, 0.025, pz, pw, 0.05, pd);
+      addBox(parent, curbMat, 0, 0.07, pz + side * pd / 2, pw, 0.1, 0.07);
+      for (let i = 0; i < 5; i++) {
+        const px = -pw / 2 + 0.2 + i * (pw - 0.4) / 4;
+        addBox(parent, parkingLineMat, px, 0.055, pz, 0.018, 0.006, pd * 0.72);
+      }
+      for (let i = 0; i < 4; i++) {
+        if (rng() < 0.38) continue;
+        const px = -pw / 2 + 0.42 + i * (pw - 0.84) / 3;
+        if (nearRoad(b.x + px, b.z + pz, 0.45)) continue;
+        addCar(parent, px, pz + (rng() - 0.5) * 0.15,
+          rng() > 0.5 ? 0 : Math.PI, carMats[i % carMats.length]);
+      }
+      return true;
+    };
+
+    const addPlanter = (parent, x, z) => {
+      addBox(parent, concreteMat, x, 0.16, z, 0.48, 0.3, 0.48);
+      addCyl(parent, foliageMat, 0.22, 0.28, 0.32, x, 0.42, z, 8);
+    };
+
+    const addWarehouseRoof = (parent, b) => {
+      for (let i = 0; i < 3; i++) {
+        const x = -b.w * 0.28 + i * b.w * 0.28;
+        addBox(parent, glassMat, x, b.h + 0.25, b.d * 0.12, b.w * 0.16, 0.03, b.d * 0.2);
+      }
+      addBox(parent, metalMat, -b.w * 0.18, b.h + 0.36, -b.d * 0.18,
+        b.w * 0.22, 0.24, b.d * 0.2);
+      for (let i = 0; i < 3; i++) {
+        addCyl(parent, metalMat, 0.07, 0.09, 0.28, b.w * 0.22, b.h + 0.36,
+          -b.d * 0.22 + i * b.d * 0.16, 8);
+      }
+    };
+
+    const addApartmentRoof = (parent, b) => {
+      addCyl(parent, metalMat, 0.2, 0.2, 0.58, b.w * 0.3, b.h + 0.52, -b.d * 0.22, 12);
+      addCyl(parent, darkMat, 0.22, 0.22, 0.05, b.w * 0.3, b.h + 0.83, -b.d * 0.22, 12);
+      addCyl(parent, metalMat, 0.012, 0.02, 0.82, -b.w * 0.32, b.h + 0.58, b.d * 0.24, 6);
+      addLamp(parent, -b.w * 0.32, b.h + 1.0, b.d * 0.24);
+      addBox(parent, darkMat, b.w * 0.2, b.h + 0.31, b.d * 0.2, 0.34, 0.12, 0.34);
+    };
+
+    const addIndustrialYard = (parent, b, rng, lift = 0) => {
+      addSidewalk(parent, b, 1.0, lift);
+      const yardX = b.w / 2 + 0.95;
+      if (areaClear(b, b.x + yardX, b.z, 0.72, b.d * 0.46, 0.45, 0.2)) {
+        addBox(parent, lotMat, yardX, 0.03, 0, 1.4, 0.05, b.d * 0.9);
+        addContainer(parent, yardX, -b.d * 0.18, 0,
+          containerMats[Math.floor(rng() * containerMats.length)]);
+        if (rng() > 0.35) {
+          addContainer(parent, yardX, b.d * 0.2, 0,
+            containerMats[Math.floor(rng() * containerMats.length)]);
+        }
+        for (let i = 0; i < 2; i++) {
+          addBox(parent, rustMat, yardX - 0.22, 0.08, b.d * 0.34 + i * 0.32,
+            0.34, 0.06, 0.26);
+        }
+        if (rng() > 0.45) {
+          addTruck(parent, yardX, b.d * 0.34, 0, carMats[Math.floor(rng() * carMats.length)]);
+        }
+      }
+      const fenceX = -b.w / 2 - 0.9;
+      if (areaClear(b, b.x + fenceX, b.z, 0.06, b.d * 0.55, 0.35, 0.15)) {
+        addFence(parent, fenceX, 0, b.d + 0.4, Math.PI / 2);
+      }
+      if (areaClear(b, b.x - b.w / 2 - 0.45, b.z - b.d * 0.28, 0.18, 0.42, 0.35, 0.15)) {
+        for (let i = 0; i < 3; i++) {
+          addCyl(parent, rustMat, 0.11, 0.11, 0.32,
+            -b.w / 2 - 0.45, 0.16, -b.d * 0.28 + i * 0.36);
+        }
+      }
+      const lampX = b.w / 2 + 1.4, lampZ = b.d / 2 + 0.4;
+      if (areaClear(b, b.x + lampX, b.z + lampZ, 0.2, 0.2, 0.35, 0.15)) {
+        addStreetLight(parent, lampX, lampZ, Math.PI);
+      }
+      if (!addParkingLot(parent, b, rng, -1)) addParkingLot(parent, b, rng, 1);
+    };
+
+    const addUrbanFrontage = (parent, b, rng, lift = 0) => {
+      addSidewalk(parent, b, 1.15, lift);
+      const lampX = b.w / 2 + 0.8, lampZ = b.d / 2 + 0.8;
+      if (areaClear(b, b.x + lampX, b.z + lampZ, 0.2, 0.2, 0.35, 0.15)) {
+        addStreetLight(parent, lampX, lampZ, Math.PI);
+      }
+      const shelterX = -b.w * 0.28, shelterZ = b.d / 2 + 0.78;
+      if (areaClear(b, b.x + shelterX, b.z + shelterZ, 0.42, 0.2, 0.35, 0.15)) {
+        addBox(parent, metalMat, shelterX, 0.1, shelterZ, 0.62, 0.06, 0.28);
+        for (const sx of [-0.22, 0.22]) {
+          addBox(parent, metalMat, shelterX + sx, 0.24, shelterZ, 0.03, 0.28, 0.03);
+        }
+      }
+      const planterX = b.w * 0.28, planterZ = b.d / 2 + 0.76;
+      if (areaClear(b, b.x + planterX, b.z + planterZ, 0.28, 0.28, 0.35, 0.15)) {
+        addPlanter(parent, planterX, planterZ);
+      }
+      const hydX = b.w / 2 + 0.45, hydZ = b.d / 2 + 0.5;
+      if (areaClear(b, b.x + hydX, b.z + hydZ, 0.16, 0.16, 0.35, 0.15)) {
+        addCyl(parent, rustMat, 0.055, 0.075, 0.22, hydX, 0.13, hydZ);
+        addBox(parent, rustMat, hydX, 0.22, hydZ, 0.18, 0.035, 0.035);
+      }
+      const carA = [-b.w / 2 - 0.9, b.d / 2 + 0.92];
+      if (areaClear(b, b.x + carA[0], b.z + carA[1], 0.28, 0.4, 0.35, 0.15)) {
+        addCar(parent, carA[0], carA[1], 0, carMats[Math.floor(rng() * carMats.length)]);
+      }
+      const carB = [b.w / 2 + 0.9, -b.d / 2 - 0.92];
+      if (rng() > 0.5 && areaClear(b, b.x + carB[0], b.z + carB[1], 0.28, 0.4, 0.35, 0.15)) {
+        addCar(parent, carB[0], carB[1], Math.PI, carMats[Math.floor(rng() * carMats.length)]);
+      }
+      if (!addParkingLot(parent, b, rng, -1)) addParkingLot(parent, b, rng, 1);
+    };
+
+    const flushProps = () => {
+      const unitCyl = new THREE.CylinderGeometry(1, 1, 1, 10);
+      const place = (mesh, list, isCyl) => {
+        list.forEach((s, i) => {
+          pv.set(s.x, s.y, s.z);
+          eul.set(0, isCyl ? 0 : s.ry, 0);
+          q.setFromEuler(eul);
+          if (isCyl) sv.set(s.r, s.h, s.r);
+          else sv.set(s.sx, s.sy, s.sz);
+          m4.compose(pv, q, sv);
+          mesh.setMatrixAt(i, m4);
+        });
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.frustumCulled = false;
+        bGroup.add(mesh);
+      };
+      for (const [mat, list] of propBoxBatches) {
+        const mesh = new THREE.InstancedMesh(unitBox, mat, list.length);
+        mesh.castShadow = !mat.transparent && !(mat.emissive && mat.emissiveIntensity > 0);
+        mesh.receiveShadow = true;
+        place(mesh, list, false);
+      }
+      for (const [mat, list] of propCylBatches) {
+        const mesh = new THREE.InstancedMesh(unitCyl, mat, list.length);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        place(mesh, list, true);
+      }
+    };
+
+    const rngBuilding = mulberry32(hashString("nexus-" + mapId + "-building"));
+    for (const [bi, b] of cache.buildings.entries()) {
       const gh = heightAt(b.x, b.z);
       const p = styleFor(b.type);
       const g = new THREE.Group();
       g.position.set(b.x, gh, b.z);
       bGroup.add(g);
+      const lift = (bi % 6) * 0.0012;
 
       // soft contact shadow so the structure is seated in the terrain
       const aoSize = Math.max(b.w, b.d) * 2.15;
@@ -5094,6 +5392,7 @@
         }
       } else if (b.type === "warehouse") {
         addPart(g, wallBox(b.w, b.h, b.d, 1.2), warehouseMat, 0, b.h / 2 + 0.15, 0);
+        addPart(g, wallBox(b.w + 0.05, 0.55, b.d + 0.05, 1.2), warehouseBaseMat, 0, 0.42, 0);
         addPart(g, new THREE.BoxGeometry(b.w + 0.2, 0.14, b.d + 0.2), metalMat, 0, b.h + 0.17, 0);
         for (const [px, pz, pw, pd] of [
           [0, b.d / 2 + 0.08, b.w + 0.2, 0.1], [0, -b.d / 2 - 0.08, b.w + 0.2, 0.1],
@@ -5114,11 +5413,16 @@
           addPart(g, new THREE.BoxGeometry(0.14, 0.09, 0.1), darkMat, sx, b.h * 0.72, b.d / 2 + 0.07);
           addPart(g, new THREE.BoxGeometry(0.1, 0.035, 0.03), glowFor(0xffd9a0), sx, b.h * 0.705, b.d / 2 + 0.12);
         }
-        for (let k = 0; k < 3; k++) {
-          const vx = -b.w * 0.28 + k * b.w * 0.28;
-          addPart(g, new THREE.CylinderGeometry(0.1, 0.12, 0.24, 10), metalMat, vx, b.h + 0.34, -b.d * 0.16);
-          addPart(g, new THREE.CylinderGeometry(0.14, 0.14, 0.04, 10), darkMat, vx, b.h + 0.48, -b.d * 0.16);
+        // loading canopy over the roller door
+        addPart(g, new THREE.BoxGeometry(b.w * 0.52, 0.05, 0.46), metalMat, 0, b.h * 0.7, b.d / 2 + 0.27);
+        for (const sx of [-b.w * 0.24, b.w * 0.24]) {
+          addPart(g, new THREE.BoxGeometry(0.035, b.h * 0.68, 0.035), metalMat, sx, b.h * 0.36, b.d / 2 + 0.47);
         }
+        // personnel door and lamp on the yard side
+        addPart(g, new THREE.BoxGeometry(0.04, 0.56, 0.34), darkMat, b.w / 2 + 0.03, 0.43, b.d * 0.06);
+        addPart(g, new THREE.BoxGeometry(0.03, 0.06, 0.1), glowFor(0xffd9a0), b.w / 2 + 0.06, 0.72, b.d * 0.06);
+        addWarehouseRoof(g, b);
+        addIndustrialYard(g, b, rngBuilding, lift);
         collectWindows(b, gh, { floors: 1, spacing: 1.4, maxW: 0.5, maxH: 0.22, litRatio: 0.22 });
       } else if (b.type === "apartment") {
         addPart(g, wallBox(b.w, b.h, b.d, 1.25), apartmentMat, 0, b.h / 2 + 0.15, 0);
@@ -5140,11 +5444,9 @@
         }
         addPart(g, new THREE.BoxGeometry(0.9, 0.06, 0.5), metalMat, 0, b.h * 0.22, b.d / 2 + 0.3);
         addPart(g, new THREE.BoxGeometry(0.9, 0.1, 0.18), concreteMat, 0, 0.05, b.d / 2 + 0.5);
-        // rooftop plant: HVAC, vent stack and hatch
-        addPart(g, new THREE.BoxGeometry(b.w * 0.3, 0.2, b.d * 0.26), metalMat, -b.w * 0.18, b.h + 0.34, 0.06);
-        addPart(g, new THREE.BoxGeometry(b.w * 0.18, 0.14, b.d * 0.18), metalMat, b.w * 0.2, b.h + 0.31, -b.d * 0.2);
-        addPart(g, new THREE.CylinderGeometry(0.07, 0.08, 0.34, 8), metalMat, b.w * 0.3, b.h + 0.42, b.d * 0.26);
-        addPart(g, new THREE.BoxGeometry(0.32, 0.08, 0.32), darkMat, -b.w * 0.3, b.h + 0.28, -b.d * 0.28);
+        // rooftop water tank, antenna and stair bulkhead
+        addApartmentRoof(g, b);
+        addUrbanFrontage(g, b, rngBuilding, lift);
         collectWindows(b, gh, { floors: 3, spacing: 0.92, maxW: 0.44, maxH: 0.26, litRatio: 0.42 });
       } else if (b.type === "plant") {
         addPart(g, wallBox(b.w, b.h, b.d, 1.25), walls.plant, 0, b.h / 2 + 0.15, 0);
@@ -5215,6 +5517,7 @@
         0, 0.02, 0);
       ring.rotation.x = -Math.PI / 2;
     }
+    flushProps();
 
     // one instanced pass for every window on every building
     if (facadeSpecs.length) {

@@ -214,6 +214,23 @@ test("scene models are instanced 3D geometry, not flat cards", () => {
   assert.ok(js.includes("flatShading: true"), "foliage is not flat-shaded 3D geometry");
 });
 
+test("dressed industrial and urban blocks use instanced street props", () => {
+  for (const token of [
+    "addIndustrialYard", "addUrbanFrontage", "addSidewalk", "addParkingLot",
+    "propBoxBatches", "propCylBatches", "flushProps", "areaClear", "nearRoad"
+  ]) {
+    assert.ok(js.includes(token), `app.js missing street detail: ${token}`);
+  }
+  assert.ok(
+    js.includes("new THREE.InstancedMesh(unitBox, mat, list.length)"),
+    "street furniture is not instanced"
+  );
+  assert.ok(
+    js.includes("new THREE.InstancedMesh(unitCyl, mat, list.length)"),
+    "round street props are not instanced"
+  );
+});
+
 test("docs and CI describe the v2 workflow", () => {
   for (const phrase of ["Focus mode", "Telemetry history", "PNG", "Comms blackout", "npm test"]) {
     assert.ok(readme.includes(phrase), `README is missing: ${phrase}`);
