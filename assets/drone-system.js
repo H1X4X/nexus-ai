@@ -199,53 +199,28 @@
       d.rtlNotified = false;
     }
 
+    // Area scan: the fleet mows the whole map instead of tracing one corridor.
+    // Each aircraft owns one longitudinal slice of the post-to-post axis and
+    // sweeps that slice from one side of the arena to the other and back, so
+    // twelve aircraft cover twelve strips and, together, the whole battlefield.
+    // Neighbours stay in adjacent slices the whole time, which keeps the relay
+    // chain from MAIN to BACKUP closed at every point of the sweep.
     missionPlanFor(i, features = [], count = this.config.count) {
       const corridor = this.corridor();
-      const relayCount = Math.ceil(count / 2);
-
-      if (i % 2 === 0) {
-        const stops = Array.from({ length: relayCount + 1 }, (_, k) => k / relayCount);
-        const sequence = stops.concat(stops.slice(1, -1).reverse());
-        const spread = ((i / 2) - 2.5) * 1.7;
-        const waypoints = sequence.map((t, k) => Object.assign(
-          corridor.point(t, this.relayLane(k) + spread),
-          { type: "relay", hold: k === 0 || k === relayCount ? 4.5 : 0 }
-        ));
-        return {
-          mission: "relay corridor",
-          waypoints,
-          startIndex: RELAY_PHASES[(i / 2) % RELAY_PHASES.length]
-        };
-      }
-
-      const source = ensureArray(features);
-      const featureList = source.length ? source.slice() : [
-        { id: "P1", x: this.main.x, z: this.main.z, r: 1 },
-        { id: "P2", x: this.backup.x, z: this.backup.z, r: 1 }
-      ];
-      featureList.sort((a, b) => corridor.tFor(a.x, a.z) - corridor.tFor(b.x, b.z));
-
-      const anchor = Object.assign(
-        corridor.point((i + 0.5) / count, this.relayLane(i)),
-        { type: "relay", hold: 2 + (i - 1) / 2 * 0.4 }
-      );
-      const slot = (i - 1) / 2;
-      const targets = [
-        featureList[slot % featureList.length],
-        featureList[(slot + 3) % featureList.length]
-      ];
-      const waypoints = [anchor];
-      for (const f of targets) {
-        if (!f) continue;
-        waypoints.push({
-          x: this.clampToArena((anchor.x + f.x) / 2),
-          z: this.clampToArena((anchor.z + f.z) / 2),
-          type: "staging"
-        });
-        waypoints.push({ x: f.x, z: f.z, type: "survey", featureId: f.id });
-        waypoints.push(Object.assign({}, anchor));
-      }
-      return { mission: "feature survey", waypoints, startIndex: 0 };
+      const lanes = Math.max(1, count);
+      const t = (i + 0.5) / lanes;
+      const reach = Math.max(3, (this.world.halfExtent || 39) - 4);
+      // Launch on the corridor line, then cross the slice edge to edge and
+      // return to the line, so every pass scans the full width of the slice.
+      const sequence = [0, -reach, reach];
+      // Uniform shape and no per-drone dwells: any lane that lingered would
+      // drift out of formation and open the mesh.
+      const waypoints = sequence.map((lane, k) => Object.assign(corridor.point(t, lane), {
+        type: "scan",
+        hold: 0,
+        leg: k
+      }));
+      return { mission: "area scan", waypoints, startIndex: 0 };
     }
 
     assignMissions(drones = [], features = [], state = this.state) {
@@ -292,7 +267,7 @@
           trusted: true,
           safetyMode: "nominal",
           idx: i,
-          mission: "feature survey",
+          mission: "area scan",
           waypoints: [],
           taskQueue: [],
           wpIndex: 0,

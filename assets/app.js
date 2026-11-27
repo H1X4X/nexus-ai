@@ -7712,16 +7712,17 @@
   }
 
   function orbitCamera(dx, dy) {
+    // Grab-the-world: the scene follows the cursor, so dragging right turns
+    // the view right and dragging left turns it left. Horizontal drags orbit,
+    // vertical drags tilt, and both axes respond on every drag — a diagonal
+    // drag never silently loses one of them.
+    //
     // ~0.011 rad/px: a single drag across the canvas (~570 px) covers a
-    // full 360° orbit without re-grabbing.
+    // full 360° orbit without re-grabbing. The low pitch end is clamped at
+    // 0.22 rad so the camera never drops to the flat horizon where the
+    // battlefield disappears edge-on.
     state.camGoal.yaw += dx * 0.011;
-    // Drag up (negative dy) lifts the camera toward top-down.
-    // Two guards keep sideways 360° drags usable: mostly-vertical drags
-    // change pitch, mostly-horizontal drags hold it — and the low end is
-    // clamped at 0.22 rad so the camera never drops to the flat horizon
-    // where the battlefield disappears edge-on.
-    const vertical = Math.abs(dx) > Math.abs(dy) * 3 ? 0 : dy;
-    state.camGoal.pitch = clamp(state.camGoal.pitch - vertical * 0.004, 0.22, 1.52);
+    state.camGoal.pitch = clamp(state.camGoal.pitch - dy * 0.004, 0.22, 1.52);
     state.camera.yaw = state.camGoal.yaw;
     state.camera.pitch = state.camGoal.pitch;
   }

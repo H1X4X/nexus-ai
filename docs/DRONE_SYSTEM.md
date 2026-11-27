@@ -106,7 +106,7 @@ const state = {
 
 ## Mission planning and task queues
 
-Even-indexed drones fly a back-and-forth **relay corridor** between MAIN and BACKUP, staggered by `RELAY_PHASES`. Odd-indexed drones fly **feature survey** missions: corridor anchor → staging point → feature survey → anchor, repeated for two features.
+Every drone flies an **area scan** mission. The post-to-post axis is divided into one longitudinal slice per aircraft, and each aircraft mows its slice from one side of the arena to the other and back, so twelve drones cover twelve strips and, together, the whole battlefield. The sweep shape is identical for every drone and has no per-drone dwells: neighbours stay in adjacent slices, which keeps the relay chain from MAIN to BACKUP closed for the entire sweep instead of letting the formation drift apart.
 
 ```js
 const plan = system.missionPlanFor(i, features, count);

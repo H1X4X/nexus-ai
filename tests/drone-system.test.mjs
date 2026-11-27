@@ -66,12 +66,18 @@ test("mission planner produces waypoint routes and matching task queues", () => 
     assert.ok(Number.isFinite(d.heading));
     assert.equal(d.autonomyMode, "takeoff");
   }
-  const relays = drones.filter((d) => d.mission === "relay corridor");
-  assert.ok(relays.length > 1, "mission planner must split relays across the corridor");
-  const starts = relays.map((d) => ({ x: d.waypoints[0].x, z: d.waypoints[0].z }));
-  assert.notDeepEqual(starts[0], starts[1], "relays must not share one corridor line");
-  assert.ok(drones.some((d) => d.mission === "relay corridor"));
-  assert.ok(drones.some((d) => d.mission === "feature survey"));
+  const scans = drones.filter((d) => d.mission === "area scan");
+  assert.equal(scans.length, drones.length, "every drone should own a scan lane");
+  const starts = scans.map((d) => ({ x: d.waypoints[0].x, z: d.waypoints[0].z }));
+  const spread = Math.max(...starts.map((a) => Math.max(...starts.map((b) => Math.hypot(a.x - b.x, a.z - b.z)))));
+  assert.ok(spread > 30, `scan lanes must span the map, got ${spread.toFixed(1)}`);
+  for (const d of scans) {
+    assert.ok(d.waypoints.length >= 3, "scan lane must have a route");
+    const xs = d.waypoints.map((w) => w.x);
+    const zs = d.waypoints.map((w) => w.z);
+    const swept = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs));
+    assert.ok(swept > 30, `scan route must sweep the map, got ${swept.toFixed(1)}`);
+  }
 });
 
 test("explicit task queue helpers add, read and clear tasks", () => {

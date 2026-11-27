@@ -4,6 +4,14 @@ This document records the v2 upgrade applied to the original single-page prototy
 
 The full engineering interpretation of the distributed work is in [`ARCHITECTURE.md`](ARCHITECTURE.md). The live simulator exposes its core state in the **Distributed architecture** strip below the metrics.
 
+## v6.4 – full-map scan lanes and camera drag
+
+Two behaviour fixes on top of v6.3. Seeds, maps, scenarios, situations and the drone-system API are unchanged.
+
+- **The fleet scans the map, not a line** – the old planner put every aircraft on one post-to-post corridor: even drones patrolled the same backbone with a few metres of lateral spread and odd drones bounced off it to individual features. The post-to-post axis is now divided into one longitudinal slice per aircraft and each drone mows its slice from one side of the arena to the other and back, so twelve strips together cover the whole battlefield. The sweep is uniform by design: an earlier cut gave some lanes feature dwells, the formation drifted apart, and the mesh collapsed from 12 connected aircraft to 0 within twenty seconds. With identical shapes and no dwells, neighbouring slices stay in mesh range and the MAIN → BACKUP chain never opens.
+- **Camera drag follows the cursor** – horizontal drags turn the view the way the cursor moves instead of the opposite way, and vertical drags tilt on every drag. The old code discarded pitch whenever a drag was mostly horizontal, so diagonal drags felt like they changed only one axis.
+- **Verification** – the drone-system test now asserts that every drone owns a lane and that the lanes span more than 30 units, so a corridor regression fails the suite.
+
 ## v6.3 – street and block detail pass
 
 A focused pass on the two hand-built environments. Seeds, maps, situations, scenarios, fleet behaviour and the drone-system API are unchanged; only the 3D dressing of industrial warehouses and urban apartment blocks changes.
