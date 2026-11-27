@@ -3140,14 +3140,14 @@
       el.canvasHint.textContent =
         state.view === "topology"
           ? "Click a node to inspect it · drag the map to pan"
-          : "Drag to move the map · right-drag or Shift-drag to orbit · scroll to zoom";
+          : "Drag up for top-down · drag to orbit · scroll to zoom · right-drag to pan";
       el.canvasHint.classList.remove("is-hidden");
     }
     if (!silent) {
       toast(
         state.view === "topology"
           ? "Network topology — rings show distance in hops from the active coordinator."
-          : "Command center — drag to move the map, right-drag to orbit, scroll to zoom, click a node.",
+          : "Command center — drag to orbit, scroll to zoom, click a node.",
         ""
       );
     }
@@ -7731,11 +7731,19 @@
     const k = state.camGoal.dist / 540;
     const cy = Math.cos(state.camGoal.yaw);
     const sy = Math.sin(state.camGoal.yaw);
-    const wx = cy * dx - sy * dy;
-    const wz = sy * dx + cy * dy;
-    state.camGoal.target[0] -= wx * k;
-    state.camGoal.target[2] -= wz * k;
+    const cp = Math.cos(state.camGoal.pitch);
+    const sp = Math.sin(state.camGoal.pitch);
+    // Pan along the camera's screen axes, not along the ground plane. Sliding
+    // the target over the ground made a vertical drag fan the terrain out from
+    // the vanishing point — features left and right of centre moved sideways,
+    // so right-drag felt like its axes were swapped. Moving the rig along the
+    // screen-right and screen-up vectors keeps both axes one-to-one with the
+    // cursor at every pitch.
+    state.camGoal.target[0] -= (dx * cy - dy * sy * sp) * k;
+    state.camGoal.target[1] = clamp(state.camGoal.target[1] + dy * cp * k, 0, 40);
+    state.camGoal.target[2] += (dx * sy - dy * cy * sp) * k;
     state.camera.target[0] = state.camGoal.target[0];
+    state.camera.target[1] = state.camGoal.target[1];
     state.camera.target[2] = state.camGoal.target[2];
   }
 
@@ -7820,13 +7828,9 @@
 
       if (!state.dragging) return;
       state.dragMoved += Math.abs(dx) + Math.abs(dy);
-      // Left drag moves the map with the cursor: drag right → map right,
-      // drag down → map down. Orbiting is the deliberate gesture
-      // (right-drag or Shift-drag) because a left-drag orbit reads as the
-      // map spinning under the cursor instead of following it.
-      const orbit = dragButton === 2 || e.shiftKey;
-      if (orbit) orbitCamera(dx, dy);
-      else panCamera(dx, dy);
+      const pan = dragButton === 2 || e.shiftKey;
+      if (pan) panCamera(dx, dy);
+      else orbitCamera(dx, dy);
     });
 
     const endPointer = (e) => {
